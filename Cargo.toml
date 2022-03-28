@@ -1,0 +1,10 @@
+[package]
+name = "emvsign"
+description = "Sign files with EMV payment cards in case you want to do that for some reason"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+pcsc = "2.7"
+structopt = "0.3"
