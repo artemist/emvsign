@@ -3,7 +3,7 @@ use crate::exchange::exchange;
 #[derive(Debug)]
 pub struct PSEEntry {}
 
-pub fn list_applications(card: &pcsc::Card, pse: &str) -> anyhow::Result<Vec<PSEEntry>> {
+pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<Vec<PSEEntry>> {
     let mut is_first = true;
     let mut receive_buffer = [0u8; 256];
     for _ in 0..2 {

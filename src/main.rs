@@ -41,8 +41,8 @@ fn main() -> anyhow::Result<()> {
     match options.cmd {
         Command::ListReaders => list_readers(&context),
         Command::ShowPSE => {
-            let card = get_card(&options, &context).context("Failed to connect to card")?;
-            let res = pse::list_applications(&card, &options.pse);
+            let mut card = get_card(&options, &context).context("Failed to connect to card")?;
+            let res = pse::list_applications(&mut card, &options.pse);
             // Reset the card because we could be in a PIN authenticated state
             card.disconnect(pcsc::Disposition::ResetCard);
             res?;
@@ -76,6 +76,6 @@ fn get_card(options: &Options, context: &pcsc::Context) -> anyhow::Result<pcsc::
     Ok(context.connect(
         &readers[options.reader],
         pcsc::ShareMode::Exclusive,
-        pcsc::Protocols::all(),
+        pcsc::Protocols::ANY,
     )?)
 }
