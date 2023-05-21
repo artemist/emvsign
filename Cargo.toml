@@ -6,5 +6,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
+lazy_static = "1.4.0"
 pcsc = "2.7"
 structopt = "0.3"

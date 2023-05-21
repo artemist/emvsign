@@ -21,10 +21,14 @@ pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<Vec
         send_buffer.push(0x00); // Le: spec says 0x00
         let (response, sw1, sw2) = exchange(card, &send_buffer)?;
 
-        for b in response {
+
+        for &b in &response {
             print!("{:02x}", b);
         }
-        println!("\n{:02x} {:02x}", sw1, sw2)
+        println!("\n{:02x} {:02x}", sw1, sw2);
+        
+        let (tag, length, value) = crate::tlv::read_tlv(&response)?;
+        println!("tag: 0x{:04x}, length: {}, value: {:#?}", tag, length, value);
     }
 
     Ok(vec![])

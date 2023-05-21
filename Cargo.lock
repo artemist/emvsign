@@ -54,6 +54,7 @@ name = "emvsign"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "lazy_static",
  "pcsc",
  "structopt",
 ]
