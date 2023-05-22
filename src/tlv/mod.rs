@@ -12,7 +12,8 @@ pub enum TLVValue {
     Alphanumeric(String),
     AlphanumericSpecial(String),
     Binary(Vec<u8>),
-    CompressedNumeric(u128), // PANs may be up to 19 digits long and could just fit into a u64 but let's leave some extra room
+    // Use a string here because the leading digit of a PAN could theoretically be 0 and we don't want to mess up
+    CompressedNumeric(String), 
     Numeric(u128),
     Template(Vec<(u16, TLVValue)>),
 }

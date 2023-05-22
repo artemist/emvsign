@@ -1,3 +1,4 @@
+use super::elements::ELEMENTS;
 /// Decode what EMV calls "BER-TLV"
 /// This is a TLV (Tag, Length, Value) format where
 ///  * The tag is 1 or 2 bytes and represents the interpretation of the data, not just the type
@@ -8,9 +9,7 @@
 /// supposed to use an ASN.1 IDL file to figure out what the fields mean
 ///
 /// For more information read EMV 4.4 Book 3 annex B1 and then cry.
-
-use super::{TLVValue, TLVDecodeError};
-use super::elements::ELEMENTS;
+use super::{TLVDecodeError, TLVValue};
 
 /// Decode the tag and length of a TLV string. This is only useful in template,
 /// as it will use this to cut down the data to the proper size.
@@ -49,7 +48,7 @@ fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), TLVDecodeError> {
         }
 
         let mut len = 0usize;
-        for b in &raw[tag_len+1..tag_len+1+num_bytes] {
+        for b in &raw[tag_len + 1..tag_len + 1 + num_bytes] {
             len = (len << 8) | (*b as usize);
         }
         (len, num_bytes + 1)
@@ -60,31 +59,68 @@ fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), TLVDecodeError> {
     Ok((tag, len, tag_len + len_len))
 }
 
-
 pub fn read_tlv(raw: &[u8]) -> Result<(u16, usize, TLVValue), TLVDecodeError> {
     let (tag, len, tl_len) = read_tl(raw)?;
     if let Some(ref data_element) = ELEMENTS.get(&tag) {
-        match (data_element.decoder)(&raw[tl_len..]) {
+        match (data_element.decoder)(&raw[tl_len..tl_len+len]) {
             Ok(value) => Ok((tag, tl_len + len, value)),
-            Err(err) => Err(TLVDecodeError::TemplateInternal(tag, Box::new(err)))
+            Err(err) => Err(TLVDecodeError::TemplateInternal(tag, Box::new(err))),
         }
     } else {
         Err(TLVDecodeError::UnknownTag(tag))
     }
 }
 
-
-
 pub(super) fn alphabetic(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
-    unimplemented!()
+    let mut s = String::with_capacity(raw.len());
+    for &b in raw {
+        let ch = b as char;
+        if !(ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z') {
+            return Err(TLVDecodeError::UnsupportedChar(
+                crate::tlv::errors::StringType::Alphabetic,
+                b,
+            ));
+        }
+        s.push(ch);
+    }
+    Ok(TLVValue::Alphabetic(s))
 }
 
 pub(super) fn alphanumeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
-    unimplemented!()
+    let mut s = String::with_capacity(raw.len());
+    for &b in raw {
+        let ch = b as char;
+        if !(ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9') {
+            return Err(TLVDecodeError::UnsupportedChar(
+                crate::tlv::errors::StringType::Alphanumeric,
+                b,
+            ));
+        }
+        s.push(ch);
+    }
+    Ok(TLVValue::Alphanumeric(s))
 }
 
 pub(super) fn alphanumeric_special(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
-    unimplemented!()
+    let mut s = String::with_capacity(raw.len());
+    for &b in raw {
+        // I don't even care anymore.
+        // The specification states that this must be under 0x7f... unless it is the
+        // Application Preferred Name and the card includes an Issuer Code Table Index
+        // value somewhere, which specifies which ISO 8859 codepage (e.g. latin-1) to use.
+        // This doesn't even apply to the user name.
+        // I expected more from France, and I barely expect anything from France.
+        // The amount of state required to propery convert that to Unicode would be terrible
+        // so I won't do it unless someone sends me a card that does so.
+        if b < 0x32 && b != 0x7f {
+            return Err(TLVDecodeError::UnsupportedChar(
+                crate::tlv::errors::StringType::AlphanumericSpecial,
+                b,
+            ));
+        }
+        s.push(b as char);
+    }
+    Ok(TLVValue::AlphanumericSpecial(s))
 }
 
 pub(super) fn binary(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
@@ -92,7 +128,27 @@ pub(super) fn binary(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
 }
 
 pub(super) fn compressed_numeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
-    unimplemented!()
+    if raw.len() > 10 {
+        return Err(TLVDecodeError::TooLong(10, raw.len()));
+    }
+    let mut s = String::with_capacity(raw.len() * 2);
+
+    'outer: for b in raw {
+        let hi = b >> 4;
+        let lo = b & 0x0f;
+        for digit in [hi, lo] {
+            if digit == 0x0f {
+                break 'outer;
+            } else if digit <= 0x09 {
+                s.push((b'0' + digit) as char);
+            } else {
+                return Err(TLVDecodeError::BadBcd(digit));
+            }
+
+        }
+    }
+    Ok(TLVValue::CompressedNumeric(s))
+    
 }
 
 pub(super) fn numeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {

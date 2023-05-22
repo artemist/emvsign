@@ -10,16 +10,18 @@ pub enum StringType {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TLVDecodeError {
-    UnsupportedChar(StringType, u8),
-    TooShort(usize, usize),
-    TooLong(usize, usize),
-    UnknownTag(u16),
+    BadBcd(u8),
     TemplateInternal(u16, Box<TLVDecodeError>),
+    TooLong(usize, usize),
+    TooShort(usize, usize),
+    UnknownTag(u16),
+    UnsupportedChar(StringType, u8),
 }
 
 impl Display for TLVDecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
+            TLVDecodeError::BadBcd(b) => write!(f, "Bad BCD character 0x{:1x}", b),
             TLVDecodeError::UnsupportedChar(string_type, ch) => write!(
                 f,
                 "Unsupported character 0x{:02x} in {:?} string",
