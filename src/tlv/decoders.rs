@@ -117,7 +117,7 @@ pub(super) fn alphanumeric_special(raw: &[u8]) -> Result<TLVValue, TLVDecodeErro
         // I expected more from France, and I barely expect anything from France.
         // The amount of state required to propery convert that to Unicode would be terrible
         // so I won't do it unless someone sends me a card that does so.
-        if b < 0x32 && b != 0x7f {
+        if b < 0x20 && b != 0x7f {
             return Err(TLVDecodeError::UnsupportedChar(
                 crate::tlv::errors::StringType::AlphanumericSpecial,
                 b,
@@ -155,7 +155,20 @@ pub(super) fn compressed_numeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError>
 }
 
 pub(super) fn numeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
-    unimplemented!()
+    let mut n = 0u128;
+
+    for b in raw {
+        let hi = b >> 4;
+        let lo = b & 0x0f;
+        for digit in [hi, lo] {
+            if digit <= 0x09 {
+                n = n * 10 + (digit as u128)
+            } else {
+                return Err(TLVDecodeError::BadBcd(digit));
+            }
+        }
+    }
+    Ok(TLVValue::Numeric(n))
 }
 
 pub(super) fn template(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {

@@ -30,7 +30,7 @@ lazy_static! {
                 tag: 0x0042,
                 name: "Issuer Identification Number (IIN)",
                 short_name: None,
-                decoder: &decoders::binary,
+                decoder: &decoders::numeric,
             }
         ),
         (
@@ -48,7 +48,7 @@ lazy_static! {
                 tag: 0x0050,
                 name: "Application Label",
                 short_name: None,
-                decoder: &decoders::binary,
+                decoder: &decoders::alphanumeric_special,
             }
         ),
         (
@@ -66,7 +66,7 @@ lazy_static! {
                 tag: 0x005a,
                 name: "Application Primary Account Number (PAN)",
                 short_name: Some("PAN"),
-                decoder: &decoders::binary,
+                decoder: &decoders::compressed_numeric,
             }
         ),
         (
@@ -75,7 +75,7 @@ lazy_static! {
                 tag: 0x0061,
                 name: "Application Template",
                 short_name: None,
-                decoder: &decoders::binary,
+                decoder: &decoders::template,
             }
         ),
         (
@@ -93,7 +93,7 @@ lazy_static! {
                 tag: 0x0070,
                 name: "READ RECORD Response Message Template",
                 short_name: None,
-                decoder: &decoders::binary,
+                decoder: &decoders::template,
             }
         ),
         (
@@ -102,7 +102,7 @@ lazy_static! {
                 tag: 0x0071,
                 name: "Issuer Script Template 1",
                 short_name: None,
-                decoder: &decoders::binary,
+                decoder: &decoders::template,
             }
         ),
         (
@@ -111,7 +111,7 @@ lazy_static! {
                 tag: 0x0072,
                 name: "Issuer Script Template 2",
                 short_name: None,
-                decoder: &decoders::binary,
+                decoder: &decoders::template,
             }
         ),
         (
@@ -120,7 +120,7 @@ lazy_static! {
                 tag: 0x0073,
                 name: "Directory Discretionary Template",
                 short_name: None,
-                decoder: &decoders::binary,
+                decoder: &decoders::template,
             }
         ),
         (
@@ -480,7 +480,7 @@ lazy_static! {
                 tag: 0x5f55,
                 name: "Issuer Country Code (alpha2 format)",
                 short_name: None,
-                decoder: &decoders::binary,
+                decoder: &decoders::alphabetic,
             }
         ),
         (
@@ -489,7 +489,7 @@ lazy_static! {
                 tag: 0x5f56,
                 name: "Issuer Country Code (alpha3 format)",
                 short_name: None,
-                decoder: &decoders::binary,
+                decoder: &decoders::alphabetic,
             }
         ),
         (

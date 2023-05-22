@@ -55,6 +55,26 @@ impl TLVValue {
             }
         }
     }
+
+    pub fn get_path(&self, path: &[u16]) -> Option<&TLVValue> {
+        let mut curr_template = self;
+
+        'outer: for tag in path {
+            match curr_template {
+                TLVValue::Template(fields) => {
+                    for field in fields {
+                        if field.tag == *tag {
+                            curr_template = &field.value;
+                            continue 'outer;
+                        }
+                    }
+                    return None;
+                }
+                _ => return None,
+            }
+        }
+        return Some(curr_template)
+    }
 }
 
 impl Display for TLVField {
@@ -80,6 +100,13 @@ impl TLVField {
                 "0x{:04x} (\"{}\") => {},\n",
                 self.tag, tag_name, self.value
             )
+        }
+    }
+    pub fn get_path(&self, path: &[u16]) -> Option<&TLVValue> {
+        if path.len() == 0 || self.tag != path[0] {
+            None
+        } else {
+            self.value.get_path(&path[1..])
         }
     }
 }

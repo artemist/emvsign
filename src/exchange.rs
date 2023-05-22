@@ -1,10 +1,10 @@
 use anyhow::Context;
 
-pub fn exchange(card: &mut pcsc::Card, command: &[u8]) -> anyhow::Result<(Vec<u8>, u8, u8)> {
+pub fn exchange(card: &mut pcsc::Card, command: &[u8]) -> anyhow::Result<(Vec<u8>, u16)> {
     let mut recieve_buffer = [0u8; 256];
     let mut response = Vec::new();
-    let mut sw1 = 0u8;
-    let mut sw2 = 0u8;
+    let mut sw1;
+    let mut sw2;
     let tx = card.transaction().context("Failed to create transaction")?;
     {
         let data = tx
@@ -25,7 +25,7 @@ pub fn exchange(card: &mut pcsc::Card, command: &[u8]) -> anyhow::Result<(Vec<u8
         modified_command[4] = sw2; // Override expected length
 
         let data = tx
-            .transmit(&command, &mut recieve_buffer)
+            .transmit(&modified_command, &mut recieve_buffer)
             .context("Failed to recieve from card after reducing size")?;
         sw1 = data[data.len() - 2];
         sw2 = data[data.len() - 1];
@@ -50,5 +50,5 @@ pub fn exchange(card: &mut pcsc::Card, command: &[u8]) -> anyhow::Result<(Vec<u8
         response.extend_from_slice(&data[..(data.len() - 2)]);
     }
 
-    Ok((response, sw1, sw2))
+    Ok((response, (sw1 as u16) << 8 | (sw2 as u16)))
 }
