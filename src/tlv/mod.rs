@@ -73,7 +73,7 @@ impl TLVValue {
                 _ => return None,
             }
         }
-        return Some(curr_template)
+        return Some(curr_template);
     }
 }
 

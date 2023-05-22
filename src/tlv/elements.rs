@@ -642,7 +642,7 @@ lazy_static! {
                 tag: 0x9f12,
                 name: "Application Preferred Name",
                 short_name: None,
-                decoder: &decoders::binary,
+                decoder: &decoders::alphanumeric_special,
             }
         ),
         (
@@ -1066,6 +1066,15 @@ lazy_static! {
                 name: "Log Format",
                 short_name: None,
                 decoder: &decoders::binary,
+            }
+        ),
+        (
+            0xbf0cu16,
+            DataElement {
+                tag: 0xbf0c,
+                name: "FCI Issuer Discretionary Data",
+                short_name: None,
+                decoder: &decoders::template,
             }
         ),
     ]);

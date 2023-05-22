@@ -33,9 +33,9 @@ impl Display for TLVDecodeError {
             TLVDecodeError::TooLong(needed, got) => {
                 write!(f, "Length too long, needed {}, got {}", needed, got)
             }
-            TLVDecodeError::UnknownTag(tag) => write!(f, "Found unknown tag {}", tag),
+            TLVDecodeError::UnknownTag(tag) => write!(f, "Found unknown tag 0x{:04x}", tag),
             TLVDecodeError::TemplateInternal(tag, ref err) => {
-                write!(f, "Error while processing tag {}: {}", tag, err)
+                write!(f, "Error while processing tag 0x{:04x}: {}", tag, err)
             }
         }
     }

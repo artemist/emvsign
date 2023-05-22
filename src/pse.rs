@@ -1,4 +1,7 @@
-use crate::{exchange::exchange, tlv::{TLVValue, self}};
+use crate::{
+    exchange::exchange,
+    tlv::{self, TLVValue},
+};
 
 #[derive(Debug)]
 pub struct PSEEntry {}
@@ -30,7 +33,7 @@ pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<Vec
                 0xb2,               // INS: READ RECORD
                 rec,                // P1: Record number
                 0x04 | (b[0] << 3), // P2: SFI, P1 is a record number
-                0x28,
+                0x00,               // Le: We'll get corrected
             ];
             let (sfi_response, sfi_sw) = exchange(card, &sfi_send_buffer)?;
             println!("SFI {:02x} rec {:02x} ({:04x})", b[0], rec, sfi_sw);
