@@ -62,7 +62,7 @@ fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), TLVDecodeError> {
 pub fn read_tlv(raw: &[u8]) -> Result<(u16, usize, TLVValue), TLVDecodeError> {
     let (tag, len, tl_len) = read_tl(raw)?;
     if let Some(ref data_element) = ELEMENTS.get(&tag) {
-        match (data_element.decoder)(&raw[tl_len..tl_len+len]) {
+        match (data_element.decoder)(&raw[tl_len..tl_len + len]) {
             Ok(value) => Ok((tag, tl_len + len, value)),
             Err(err) => Err(TLVDecodeError::TemplateInternal(tag, Box::new(err))),
         }
@@ -144,11 +144,9 @@ pub(super) fn compressed_numeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError>
             } else {
                 return Err(TLVDecodeError::BadBcd(digit));
             }
-
         }
     }
     Ok(TLVValue::CompressedNumeric(s))
-    
 }
 
 pub(super) fn numeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {

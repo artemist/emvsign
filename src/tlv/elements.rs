@@ -426,7 +426,7 @@ lazy_static! {
                 tag: 0x5f2d,
                 name: "Language Preference",
                 short_name: None,
-                decoder: &decoders::binary,
+                decoder: &decoders::alphanumeric,
             }
         ),
         (
