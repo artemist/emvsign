@@ -9,7 +9,7 @@ use super::elements::ELEMENTS;
 /// supposed to use an ASN.1 IDL file to figure out what the fields mean
 ///
 /// For more information read EMV 4.4 Book 3 annex B1 and then cry.
-use super::{TLVDecodeError, TLVValue};
+use super::{TLVDecodeError, TLVField, TLVValue};
 
 /// Decode the tag and length of a TLV string. This is only useful in template,
 /// as it will use this to cut down the data to the proper size.
@@ -59,7 +59,7 @@ fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), TLVDecodeError> {
     Ok((tag, len, tag_len + len_len))
 }
 
-pub fn read_tlv(raw: &[u8]) -> Result<(u16, usize, TLVValue), TLVDecodeError> {
+fn read_tlv(raw: &[u8]) -> Result<(u16, usize, TLVValue), TLVDecodeError> {
     let (tag, len, tl_len) = read_tl(raw)?;
     if let Some(ref data_element) = ELEMENTS.get(&tag) {
         match (data_element.decoder)(&raw[tl_len..tl_len + len]) {
@@ -69,6 +69,11 @@ pub fn read_tlv(raw: &[u8]) -> Result<(u16, usize, TLVValue), TLVDecodeError> {
     } else {
         Err(TLVDecodeError::UnknownTag(tag))
     }
+}
+
+pub fn read_field(raw: &[u8]) -> Result<TLVField, TLVDecodeError> {
+    let (tag, _, value) = read_tlv(raw)?;
+    Ok(TLVField { tag, value })
 }
 
 pub(super) fn alphabetic(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
@@ -164,7 +169,7 @@ pub(super) fn template(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
     while offset < raw.len() {
         let (tag, len, value) = read_tlv(&raw[offset..])?;
         offset += len;
-        fields.push((tag, value));
+        fields.push(TLVField { tag, value });
     }
     Ok(TLVValue::Template(fields))
 }

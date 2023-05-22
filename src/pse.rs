@@ -26,8 +26,8 @@ pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<Vec
         }
         println!("\n{:02x} {:02x}", sw1, sw2);
 
-        let (tag, length, value) = crate::tlv::read_tlv(&response)?;
-        println!("tag: 0x{:04x}, length: {}, value:\n{}", tag, length, value);
+        let field = crate::tlv::read_field(&response)?;
+        println!("field:\n{}", field);
     }
 
     Ok(vec![])
