@@ -16,6 +16,9 @@ pub enum TLVDecodeError {
     TooShort(usize, usize),
     UnknownTag(u16),
     UnsupportedChar(StringType, u8),
+    NoPathRequested,
+    WrongType(u16, &'static str),
+    NoSuchMember(u16),
 }
 
 impl Display for TLVDecodeError {
@@ -36,6 +39,13 @@ impl Display for TLVDecodeError {
             TLVDecodeError::UnknownTag(tag) => write!(f, "Found unknown tag 0x{:04x}", tag),
             TLVDecodeError::TemplateInternal(tag, ref err) => {
                 write!(f, "Error while processing tag 0x{:04x}: {}", tag, err)
+            }
+            TLVDecodeError::NoPathRequested => write!(f, "No path requested"),
+            TLVDecodeError::WrongType(tag, wanted) => {
+                write!(f, "Found 0x{:04x} but it is not {}", tag, wanted)
+            }
+            TLVDecodeError::NoSuchMember(tag) => {
+                write!(f, "No member of template with tag 0x{:04x}", tag)
             }
         }
     }

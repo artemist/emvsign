@@ -43,6 +43,7 @@ fn main() -> anyhow::Result<()> {
         Command::ShowPSE => {
             let mut card = get_card(&options, &context).context("Failed to connect to card")?;
             let res = pse::list_applications(&mut card, &options.pse);
+            println!("{:#?}", res);
             // Reset the card because we could be in a PIN authenticated state
             if card.disconnect(pcsc::Disposition::ResetCard).is_err() {
                 eprintln!("Failed to reset card, you may need to manually unplug the card");

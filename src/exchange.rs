@@ -1,6 +1,58 @@
 use anyhow::Context;
 
-pub fn exchange(card: &mut pcsc::Card, command: &[u8]) -> anyhow::Result<(Vec<u8>, u16)> {
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub struct ADPUCommand<'a> {
+    /// Command class
+    pub cla: u8,
+    /// Command instruction
+    pub ins: u8,
+    /// First byte of command paramenter
+    pub p1: u8,
+    /// Second byte of command parameter
+    pub p2: u8,
+    /// Command data
+    pub data: &'a [u8],
+    /// Number of bytes expected for response, between 0 and 65536 inclusive
+    pub ne: u32,
+}
+
+impl ADPUCommand<'_> {
+    pub fn encode(&self) -> Option<Box<[u8]>> {
+        let mut raw = Vec::with_capacity(10 + self.data.len());
+        raw.extend_from_slice(&[self.cla, self.ins, self.p1, self.p2]);
+
+        let nc = self.data.len();
+        if nc == 0 {
+            // Do nothing, Lc is empty
+        } else if nc <= 255 {
+            raw.push(nc as u8)
+        } else if nc <= 65535 {
+            raw.push(0u8);
+            raw.extend_from_slice(&(nc as u16).to_be_bytes());
+        } else {
+            // Impossible to encode over 65536 bytes
+            return None;
+        }
+        raw.extend_from_slice(self.data);
+
+        if self.ne == 0 {
+            // Do nothing, Le is empty
+        } else if self.ne <= 256 {
+            // 256 will be 0x100 which we truncate to 0x00. This is correct.
+            raw.push(self.ne as u8)
+        } else if self.ne <= 65536 {
+            // 65536 will be 0x10000 which we truncate to 0x0000. This is correct.
+            if nc <= 255 {
+                raw.push(0u8);
+            }
+            raw.extend_from_slice(&(self.ne as u16).to_be_bytes())
+        }
+
+        Some(raw.into_boxed_slice())
+    }
+}
+
+pub fn exchange(card: &mut pcsc::Card, command: &ADPUCommand) -> anyhow::Result<(Vec<u8>, u16)> {
     let mut recieve_buffer = [0u8; 256];
     let mut response = Vec::new();
     let mut sw1;
@@ -8,7 +60,12 @@ pub fn exchange(card: &mut pcsc::Card, command: &[u8]) -> anyhow::Result<(Vec<u8
     let tx = card.transaction().context("Failed to create transaction")?;
     {
         let data = tx
-            .transmit(&command, &mut recieve_buffer)
+            .transmit(
+                &command
+                    .encode()
+                    .ok_or_else(|| anyhow::anyhow!("Could not encode command"))?,
+                &mut recieve_buffer,
+            )
             .context("Failed to recieve from card")?;
         if data.len() < 2 {
             anyhow::bail!("Received message too short");
@@ -20,12 +77,16 @@ pub fn exchange(card: &mut pcsc::Card, command: &[u8]) -> anyhow::Result<(Vec<u8
 
     if sw1 == 0x6c {
         // Reduce data size requested
-        let mut modified_command = Vec::with_capacity(command.len());
-        modified_command.extend_from_slice(command);
-        modified_command[4] = sw2; // Override expected length
+        let mut modified_command = command.clone();
+        modified_command.ne = sw2 as u32;
 
         let data = tx
-            .transmit(&modified_command, &mut recieve_buffer)
+            .transmit(
+                &modified_command
+                    .encode()
+                    .ok_or_else(|| anyhow::anyhow!("Could not encode command"))?,
+                &mut recieve_buffer,
+            )
             .context("Failed to recieve from card after reducing size")?;
         sw1 = data[data.len() - 2];
         sw2 = data[data.len() - 1];

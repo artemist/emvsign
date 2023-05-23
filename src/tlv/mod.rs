@@ -56,24 +56,48 @@ impl TLVValue {
         }
     }
 
-    pub fn get_path(&self, path: &[u16]) -> Option<&TLVValue> {
+    pub fn get_path(&self, path: &[u16]) -> Result<&TLVValue, TLVDecodeError> {
         let mut curr_template = self;
 
+        let mut last_tag = 0;
         'outer: for tag in path {
             match curr_template {
                 TLVValue::Template(fields) => {
                     for field in fields {
                         if field.tag == *tag {
                             curr_template = &field.value;
+                            last_tag = *tag;
                             continue 'outer;
                         }
                     }
-                    return None;
+                    return Err(TLVDecodeError::NoSuchMember(*tag));
                 }
-                _ => return None,
+                _ => return Err(TLVDecodeError::WrongType(last_tag, "Template")),
             }
         }
-        return Some(curr_template);
+        return Ok(curr_template);
+    }
+
+    pub fn get_path_owned(self, path: &[u16]) -> Result<TLVValue, TLVDecodeError> {
+        let mut curr_template = self;
+
+        let mut last_tag = 0;
+        'outer: for tag in path {
+            match curr_template {
+                TLVValue::Template(fields) => {
+                    for field in fields {
+                        if field.tag == *tag {
+                            curr_template = field.value;
+                            last_tag = *tag;
+                            continue 'outer;
+                        }
+                    }
+                    return Err(TLVDecodeError::NoSuchMember(*tag));
+                }
+                _ => return Err(TLVDecodeError::WrongType(last_tag, "Template")),
+            }
+        }
+        return Ok(curr_template);
     }
 }
 
@@ -102,11 +126,47 @@ impl TLVField {
             )
         }
     }
-    pub fn get_path(&self, path: &[u16]) -> Option<&TLVValue> {
-        if path.len() == 0 || self.tag != path[0] {
-            None
+    pub fn get_path(&self, path: &[u16]) -> Result<&TLVValue, TLVDecodeError> {
+        if path.len() == 0 {
+            Err(TLVDecodeError::NoPathRequested)
+        } else if self.tag != path[0] {
+            Err(TLVDecodeError::NoSuchMember(path[0]))
         } else {
             self.value.get_path(&path[1..])
+        }
+    }
+
+    pub fn get_path_owned(self, path: &[u16]) -> Result<TLVValue, TLVDecodeError> {
+        if path.len() == 0 {
+            Err(TLVDecodeError::NoPathRequested)
+        } else if self.tag != path[0] {
+            Err(TLVDecodeError::NoSuchMember(path[0]))
+        } else {
+            self.value.get_path_owned(&path[1..])
+        }
+    }
+
+    pub fn get_path_binary(&self, path: &[u16]) -> Result<&[u8], TLVDecodeError> {
+        match self.get_path(path)? {
+            TLVValue::Binary(b) => Ok(&b),
+            _ => Err(TLVDecodeError::WrongType(path[path.len() - 1], "Binary")),
+        }
+    }
+
+    pub fn get_path_numeric(&self, path: &[u16]) -> Result<u128, TLVDecodeError> {
+        match self.get_path(path)? {
+            TLVValue::Numeric(n) => Ok(*n),
+            _ => Err(TLVDecodeError::WrongType(path[path.len() - 1], "Numeric")),
+        }
+    }
+
+    pub fn get_path_string(&self, path: &[u16]) -> Result<&str, TLVDecodeError> {
+        match self.get_path(path)? {
+            TLVValue::Alphabetic(s) => Ok(&s),
+            TLVValue::Alphanumeric(s) => Ok(&s),
+            TLVValue::AlphanumericSpecial(s) => Ok(&s),
+            TLVValue::CompressedNumeric(s) => Ok(&s),
+            _ => Err(TLVDecodeError::WrongType(path[path.len() - 1], "String")),
         }
     }
 }

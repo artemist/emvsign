@@ -1,44 +1,127 @@
+use anyhow::Context;
+
 use crate::{
-    exchange::exchange,
-    tlv::{self, TLVValue},
+    exchange::{exchange, ADPUCommand},
+    tlv::{self, errors::TLVDecodeError, TLVField, TLVValue},
 };
 
-#[derive(Debug)]
-pub struct PSEEntry {}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationTemplate {
+    pub aid: Vec<u8>,
+    pub label: String,
+    pub priority: Option<u8>,
+    pub country: Option<String>,
+    pub iin: Option<u32>,
+}
 
-pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<Vec<PSEEntry>> {
-    // Read the PSE
-    let mut send_buffer = vec![
-        0x00,                       // CLA: Interindustry command
-        0xa4,                       // INS: SELECT
-        0x04,                       // P1: Select by name
-        0x00,                       // P2: We're looking for the first element
-        pse.as_bytes().len() as u8, // Lc: Length of PSE name
-    ];
-    send_buffer.extend_from_slice(pse.as_bytes()); // Data: PSE name
-    send_buffer.push(0x00); // Le: spec says 0x00
-    let (response, _sw) = exchange(card, &send_buffer)?;
+impl TryFrom<TLVField> for ApplicationTemplate {
+    type Error = TLVDecodeError;
 
-    let pse_data = tlv::read_field(&response)?;
+    fn try_from(value: TLVField) -> Result<Self, Self::Error> {
+        //TODO: Deal with cards like Discover Debit which put multiple Application Templates in one
+        //record
+        let mut aid = None;
+        let mut label = None;
+        let mut priority = None;
+        let mut country = None;
+        let mut iin = None;
+
+        let template = value.get_path_owned(&[0x70, 0x61])?;
+        if let TLVValue::Template(fields) = template {
+            for field in fields.into_iter() {
+                match field.value {
+                    TLVValue::Binary(b) if field.tag == 0x4f => aid = Some(b),
+                    TLVValue::AlphanumericSpecial(s) if field.tag == 0x50 => label = Some(s),
+                    TLVValue::Binary(b) if field.tag == 0x87 && b.len() == 1 => {
+                        priority = Some(b[0])
+                    }
+                    TLVValue::Template(ddt) if field.tag == 0x73 => {
+                        for ddt_field in ddt.into_iter() {
+                            match ddt_field.value {
+                                TLVValue::Alphabetic(s) if ddt_field.tag == 0x5f55 => {
+                                    country = Some(s)
+                                }
+                                TLVValue::Numeric(n) if ddt_field.tag == 0x42 => {
+                                    iin = Some(n as u32)
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            Ok(ApplicationTemplate {
+                aid: aid.ok_or(TLVDecodeError::NoSuchMember(0x4f))?,
+                label: label.ok_or(TLVDecodeError::NoSuchMember(0x50))?,
+                priority,
+                country,
+                iin,
+            })
+        } else {
+            Err(TLVDecodeError::WrongType(0x61, "Template"))
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PSEData {
+    pub languages: Vec<String>,
+    pub applications: Vec<ApplicationTemplate>,
+}
+
+pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<PSEData> {
+    let pse_command = ADPUCommand {
+        cla: 0x00,             // Interindustry command
+        ins: 0xa4,             // SELECT
+        p1: 0x04,              // Select by name
+        p2: 0x00,              // 1st element
+        data: &pse.as_bytes(), // PSE name
+        ne: 0x100,             // 256 bytes, the card will correct us
+    };
+    let (response, sw) = exchange(card, &pse_command)?;
+
+    if sw != 0x9000 {
+        anyhow::bail!(
+            "Failure returned by card while selecting PSE {}: 0x{:04x}",
+            pse,
+            sw
+        );
+    }
+
+    let mut applications = Vec::new();
+    let pse_data = tlv::read_field(&response)
+        .context("Failed to parse Payment System Environment response")?;
     println!("{}:\n{}", pse, pse_data);
 
-    if let TLVValue::Binary(b) = pse_data.get_path(&[0x6f, 0xa5, 0x88]).unwrap() {
+    if let TLVValue::Binary(b) = pse_data
+        .get_path(&[0x6f, 0xa5, 0x88])
+        .context("Could not find SFI in PSE")?
+    {
         let sfi = b[0];
         if sfi & 0b1110_0000 != 0 {
             anyhow::bail!("Invalid SFI {:02x}", sfi);
         }
+
         for rec in 1..16 {
-            let sfi_send_buffer = vec![
-                0x00,               // CLA: Interindustry command
-                0xb2,               // INS: READ RECORD
-                rec,                // P1: Record number
-                0x04 | (b[0] << 3), // P2: SFI, P1 is a record number
-                0x00,               // Le: We'll get corrected
-            ];
-            let (sfi_response, sfi_sw) = exchange(card, &sfi_send_buffer)?;
+            let sfi_command = ADPUCommand {
+                cla: 0x00,             // Interindustry command
+                ins: 0xb2,             // READ RECORD
+                p1: rec,               // Record number
+                p2: (sfi << 3) | 0x04, // SFI, P1 is a record number
+                data: &[],             // No data
+                ne: 0x100,             // 256 bytes, the card will correct us
+            };
+            let (sfi_response, sfi_sw) = exchange(card, &sfi_command)?;
             println!("SFI {:02x} rec {:02x} ({:04x})", b[0], rec, sfi_sw);
             if sfi_sw == 0x9000 {
-                println!("{}", tlv::read_field(&sfi_response)?);
+                let record = tlv::read_field(&sfi_response).with_context(|| {
+                    format!("Failed to parse SFI 0x{:02x} record 0x{:02x}", sfi, rec)
+                })?;
+                println!("{}", record);
+
+                applications.push(record.try_into().context("Failed to parse SFI record")?);
             }
 
             if sfi_sw == 0x6a83 {
@@ -48,5 +131,15 @@ pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<Vec
         }
     }
 
-    Ok(vec![])
+    Ok(PSEData {
+        languages: if let Ok(s) = pse_data.get_path_string(&[0x6f, 0xa5, 0x5f2d]) {
+            s.as_bytes()
+                .chunks_exact(2)
+                .filter_map(|bytes| String::from_utf8(bytes.to_vec()).ok())
+                .collect()
+        } else {
+            Vec::new()
+        },
+        applications,
+    })
 }
