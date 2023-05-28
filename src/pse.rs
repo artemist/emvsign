@@ -2,7 +2,7 @@ use anyhow::Context;
 
 use crate::{
     exchange::{exchange, ADPUCommand},
-    tlv::{self, errors::TLVDecodeError, TLVField, TLVValue},
+    tlv::{self, errors::TLVDecodeError, Field, Value},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,10 +14,10 @@ pub struct ApplicationTemplate {
     pub iin: Option<u32>,
 }
 
-impl TryFrom<TLVField> for ApplicationTemplate {
+impl TryFrom<Field> for ApplicationTemplate {
     type Error = TLVDecodeError;
 
-    fn try_from(value: TLVField) -> Result<Self, Self::Error> {
+    fn try_from(value: Field) -> Result<Self, Self::Error> {
         //TODO: Deal with cards like Discover Debit which put multiple Application Templates in one
         //record
         let mut aid = None;
@@ -27,23 +27,19 @@ impl TryFrom<TLVField> for ApplicationTemplate {
         let mut iin = None;
 
         let template = value.get_path_owned(&[0x70, 0x61])?;
-        if let TLVValue::Template(fields) = template {
+        if let Value::Template(fields) = template {
             for field in fields.into_iter() {
                 match field.value {
-                    TLVValue::Binary(b) if field.tag == 0x4f => aid = Some(b),
-                    TLVValue::AlphanumericSpecial(s) if field.tag == 0x50 => label = Some(s),
-                    TLVValue::Binary(b) if field.tag == 0x87 && b.len() == 1 => {
-                        priority = Some(b[0])
-                    }
-                    TLVValue::Template(ddt) if field.tag == 0x73 => {
+                    Value::Binary(b) if field.tag == 0x4f => aid = Some(b),
+                    Value::AlphanumericSpecial(s) if field.tag == 0x50 => label = Some(s),
+                    Value::Binary(b) if field.tag == 0x87 && b.len() == 1 => priority = Some(b[0]),
+                    Value::Template(ddt) if field.tag == 0x73 => {
                         for ddt_field in ddt.into_iter() {
                             match ddt_field.value {
-                                TLVValue::Alphabetic(s) if ddt_field.tag == 0x5f55 => {
+                                Value::Alphabetic(s) if ddt_field.tag == 0x5f55 => {
                                     country = Some(s)
                                 }
-                                TLVValue::Numeric(n) if ddt_field.tag == 0x42 => {
-                                    iin = Some(n as u32)
-                                }
+                                Value::Numeric(n) if ddt_field.tag == 0x42 => iin = Some(n as u32),
                                 _ => {}
                             }
                         }
@@ -95,7 +91,7 @@ pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<PSE
         .context("Failed to parse Payment System Environment response")?;
     println!("{}:\n{}", pse, pse_data);
 
-    if let TLVValue::Binary(b) = pse_data
+    if let Value::Binary(b) = pse_data
         .get_path(&[0x6f, 0xa5, 0x88])
         .context("Could not find SFI in PSE")?
     {

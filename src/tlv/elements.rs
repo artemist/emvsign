@@ -1,5 +1,5 @@
 use super::decoders;
-use crate::tlv::{TLVDecodeError, TLVValue};
+use crate::tlv::{TLVDecodeError, Value};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -9,7 +9,7 @@ pub struct DataElement {
     pub tag: u16,
     pub name: &'static str,
     pub short_name: Option<&'static str>,
-    pub decoder: &'static (dyn Fn(&[u8]) -> Result<TLVValue, TLVDecodeError> + Sync),
+    pub decoder: &'static (dyn Fn(&[u8]) -> Result<Value, TLVDecodeError> + Sync),
 }
 
 impl Display for DataElement {

@@ -9,7 +9,7 @@ use super::elements::ELEMENTS;
 /// supposed to use an ASN.1 IDL file to figure out what the fields mean
 ///
 /// For more information read EMV 4.4 Book 3 annex B1 and then cry.
-use super::{TLVDecodeError, TLVField, TLVValue};
+use super::{Field, TLVDecodeError, Value};
 
 /// Decode the tag and length of a TLV string. This is only useful in template,
 /// as it will use this to cut down the data to the proper size.
@@ -59,7 +59,7 @@ fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), TLVDecodeError> {
     Ok((tag, len, tag_len + len_len))
 }
 
-fn read_tlv(raw: &[u8]) -> Result<(u16, usize, TLVValue), TLVDecodeError> {
+fn read_tlv(raw: &[u8]) -> Result<(u16, usize, Value), TLVDecodeError> {
     let (tag, len, tl_len) = read_tl(raw)?;
     if let Some(ref data_element) = ELEMENTS.get(&tag) {
         match (data_element.decoder)(&raw[tl_len..tl_len + len]) {
@@ -71,12 +71,12 @@ fn read_tlv(raw: &[u8]) -> Result<(u16, usize, TLVValue), TLVDecodeError> {
     }
 }
 
-pub fn read_field(raw: &[u8]) -> Result<TLVField, TLVDecodeError> {
+pub fn read_field(raw: &[u8]) -> Result<Field, TLVDecodeError> {
     let (tag, _, value) = read_tlv(raw)?;
-    Ok(TLVField { tag, value })
+    Ok(Field { tag, value })
 }
 
-pub(super) fn alphabetic(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
+pub(super) fn alphabetic(raw: &[u8]) -> Result<Value, TLVDecodeError> {
     let mut s = String::with_capacity(raw.len());
     for &b in raw {
         let ch = b as char;
@@ -88,10 +88,10 @@ pub(super) fn alphabetic(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
         }
         s.push(ch);
     }
-    Ok(TLVValue::Alphabetic(s))
+    Ok(Value::Alphabetic(s))
 }
 
-pub(super) fn alphanumeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
+pub(super) fn alphanumeric(raw: &[u8]) -> Result<Value, TLVDecodeError> {
     let mut s = String::with_capacity(raw.len());
     for &b in raw {
         let ch = b as char;
@@ -103,10 +103,10 @@ pub(super) fn alphanumeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
         }
         s.push(ch);
     }
-    Ok(TLVValue::Alphanumeric(s))
+    Ok(Value::Alphanumeric(s))
 }
 
-pub(super) fn alphanumeric_special(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
+pub(super) fn alphanumeric_special(raw: &[u8]) -> Result<Value, TLVDecodeError> {
     let mut s = String::with_capacity(raw.len());
     for &b in raw {
         // I don't even care anymore.
@@ -125,14 +125,14 @@ pub(super) fn alphanumeric_special(raw: &[u8]) -> Result<TLVValue, TLVDecodeErro
         }
         s.push(b as char);
     }
-    Ok(TLVValue::AlphanumericSpecial(s))
+    Ok(Value::AlphanumericSpecial(s))
 }
 
-pub(super) fn binary(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
-    Ok(TLVValue::Binary(raw.to_vec()))
+pub(super) fn binary(raw: &[u8]) -> Result<Value, TLVDecodeError> {
+    Ok(Value::Binary(raw.to_vec()))
 }
 
-pub(super) fn compressed_numeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
+pub(super) fn compressed_numeric(raw: &[u8]) -> Result<Value, TLVDecodeError> {
     if raw.len() > 10 {
         return Err(TLVDecodeError::TooLong(10, raw.len()));
     }
@@ -151,10 +151,10 @@ pub(super) fn compressed_numeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError>
             }
         }
     }
-    Ok(TLVValue::CompressedNumeric(s))
+    Ok(Value::CompressedNumeric(s))
 }
 
-pub(super) fn numeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
+pub(super) fn numeric(raw: &[u8]) -> Result<Value, TLVDecodeError> {
     let mut n = 0u128;
 
     for b in raw {
@@ -168,13 +168,13 @@ pub(super) fn numeric(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
             }
         }
     }
-    Ok(TLVValue::Numeric(n))
+    Ok(Value::Numeric(n))
 }
 
-pub(super) fn template(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
+pub(super) fn template(raw: &[u8]) -> Result<Value, TLVDecodeError> {
     // This template could be empty, so no need to error
     if raw.len() == 0 {
-        return Ok(TLVValue::Template(Vec::new()));
+        return Ok(Value::Template(Vec::new()));
     }
 
     let mut offset = 0;
@@ -182,7 +182,7 @@ pub(super) fn template(raw: &[u8]) -> Result<TLVValue, TLVDecodeError> {
     while offset < raw.len() {
         let (tag, len, value) = read_tlv(&raw[offset..])?;
         offset += len;
-        fields.push(TLVField { tag, value });
+        fields.push(Field { tag, value });
     }
-    Ok(TLVValue::Template(fields))
+    Ok(Value::Template(fields))
 }

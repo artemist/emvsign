@@ -8,4 +8,5 @@ edition = "2021"
 anyhow = "1.0"
 lazy_static = "1.4.0"
 pcsc = "2.7"
+serde = { version = "1.0.163", features = ["derive"] }
 structopt = "0.3"
