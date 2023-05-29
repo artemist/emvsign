@@ -1,4 +1,4 @@
-use super::elements::ELEMENTS;
+use super::elements::{ElementType, ELEMENTS};
 /// Decode what EMV calls "BER-TLV"
 /// This is a TLV (Tag, Length, Value) format where
 ///  * The tag is 1 or 2 bytes and represents the interpretation of the data, not just the type
@@ -59,10 +59,22 @@ pub(super) fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), DecodeError> {
     Ok((tag, len, tag_len + len_len))
 }
 
+fn decode_with_type(typ: ElementType, raw: &[u8]) -> Result<Value, DecodeError> {
+    match typ {
+        ElementType::Alphabetic => alphabetic(raw),
+        ElementType::Alphanumeric => alphanumeric(raw),
+        ElementType::AlphanumericSpecial => alphanumeric_special(raw),
+        ElementType::Binary => binary(raw),
+        ElementType::CompressedNumeric => compressed_numeric(raw),
+        ElementType::Numeric => numeric(raw),
+        ElementType::Template => template(raw),
+    }
+}
+
 fn read_tlv(raw: &[u8]) -> Result<(u16, usize, Value), DecodeError> {
     let (tag, len, tl_len) = read_tl(raw)?;
     if let Some(ref data_element) = ELEMENTS.get(&tag) {
-        match (data_element.decoder)(&raw[tl_len..tl_len + len]) {
+        match decode_with_type(data_element.typ, &raw[tl_len..tl_len + len]) {
             Ok(value) => Ok((tag, tl_len + len, value)),
             Err(err) => Err(DecodeError::TemplateInternal(tag, Box::new(err))),
         }
