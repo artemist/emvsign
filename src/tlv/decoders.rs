@@ -13,7 +13,7 @@ use super::{Field, TLVDecodeError, Value};
 
 /// Decode the tag and length of a TLV string. This is only useful in template,
 /// as it will use this to cut down the data to the proper size.
-fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), TLVDecodeError> {
+pub(super) fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), TLVDecodeError> {
     // Tag + length is always at least 2 bytes
     if raw.len() < 2 {
         return Err(TLVDecodeError::TooShort(2, raw.len()));
@@ -117,7 +117,7 @@ pub(super) fn alphanumeric_special(raw: &[u8]) -> Result<Value, TLVDecodeError> 
         // I expected more from France, and I barely expect anything from France.
         // The amount of state required to propery convert that to Unicode would be terrible
         // so I won't do it unless someone sends me a card that does so.
-        if b < 0x20 && b != 0x7f {
+        if b < 0x20 || b == 0x7f {
             return Err(TLVDecodeError::UnsupportedChar(
                 crate::tlv::errors::StringType::AlphanumericSpecial,
                 b,

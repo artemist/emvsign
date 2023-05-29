@@ -1,6 +1,8 @@
 pub mod decoders;
 pub mod elements;
 pub mod errors;
+#[cfg(test)]
+mod tests;
 
 use std::fmt::Display;
 
