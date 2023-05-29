@@ -56,3 +56,24 @@ fn test_read_alphanumeric_special_unsupported_char() {
         ))
     )
 }
+
+#[test]
+fn test_parse_ddt() {
+    assert_eq!(
+        // Hnadwritten example of what a Directory Discretionary Template could be
+        super::read_field(&b"\x73\x0b\x5f\x55\x02US\x42\x04\x00\x44\x03\x93"[..]).unwrap(),
+        Field {
+            tag: 0x73,
+            value: Value::Template(vec![
+                Field {
+                    tag: 0x5f55,
+                    value: Value::Alphabetic("US".to_string()),
+                },
+                Field {
+                    tag: 0x42,
+                    value: Value::Numeric(440393),
+                }
+            ])
+        }
+    )
+}
