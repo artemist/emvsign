@@ -2,7 +2,7 @@ use anyhow::Context;
 
 use crate::{
     exchange::{exchange, ADPUCommand},
-    tlv::{self, errors::TLVDecodeError, Field, Value},
+    tlv::{self, errors::DecodeError, Field, Value},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,7 +15,7 @@ pub struct ApplicationTemplate {
 }
 
 impl TryFrom<Field> for ApplicationTemplate {
-    type Error = TLVDecodeError;
+    type Error = DecodeError;
 
     fn try_from(value: Field) -> Result<Self, Self::Error> {
         //TODO: Deal with cards like Discover Debit which put multiple Application Templates in one
@@ -49,14 +49,14 @@ impl TryFrom<Field> for ApplicationTemplate {
             }
 
             Ok(ApplicationTemplate {
-                aid: aid.ok_or(TLVDecodeError::NoSuchMember(0x4f))?,
-                label: label.ok_or(TLVDecodeError::NoSuchMember(0x50))?,
+                aid: aid.ok_or(DecodeError::NoSuchMember(0x4f))?,
+                label: label.ok_or(DecodeError::NoSuchMember(0x50))?,
                 priority,
                 country,
                 iin,
             })
         } else {
-            Err(TLVDecodeError::WrongType(0x61, "Template"))
+            Err(DecodeError::WrongType(0x61, "Template"))
         }
     }
 }

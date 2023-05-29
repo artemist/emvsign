@@ -9,9 +9,9 @@ pub enum StringType {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TLVDecodeError {
+pub enum DecodeError {
     BadBcd(u8),
-    TemplateInternal(u16, Box<TLVDecodeError>),
+    TemplateInternal(u16, Box<DecodeError>),
     TooLong(usize, usize),
     TooShort(usize, usize),
     UnknownTag(u16),
@@ -21,34 +21,34 @@ pub enum TLVDecodeError {
     NoSuchMember(u16),
 }
 
-impl Display for TLVDecodeError {
+impl Display for DecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            TLVDecodeError::BadBcd(b) => write!(f, "Bad BCD character 0x{:1x}", b),
-            TLVDecodeError::UnsupportedChar(string_type, ch) => write!(
+            DecodeError::BadBcd(b) => write!(f, "Bad BCD character 0x{:1x}", b),
+            DecodeError::UnsupportedChar(string_type, ch) => write!(
                 f,
                 "Unsupported character 0x{:02x} in {:?} string",
                 ch, string_type
             ),
-            TLVDecodeError::TooShort(needed, got) => {
+            DecodeError::TooShort(needed, got) => {
                 write!(f, "Message too short, needed {}, got {}", needed, got)
             }
-            TLVDecodeError::TooLong(needed, got) => {
+            DecodeError::TooLong(needed, got) => {
                 write!(f, "Length too long, needed {}, got {}", needed, got)
             }
-            TLVDecodeError::UnknownTag(tag) => write!(f, "Found unknown tag 0x{:04x}", tag),
-            TLVDecodeError::TemplateInternal(tag, ref err) => {
+            DecodeError::UnknownTag(tag) => write!(f, "Found unknown tag 0x{:04x}", tag),
+            DecodeError::TemplateInternal(tag, ref err) => {
                 write!(f, "Error while processing tag 0x{:04x}: {}", tag, err)
             }
-            TLVDecodeError::NoPathRequested => write!(f, "No path requested"),
-            TLVDecodeError::WrongType(tag, wanted) => {
+            DecodeError::NoPathRequested => write!(f, "No path requested"),
+            DecodeError::WrongType(tag, wanted) => {
                 write!(f, "Found 0x{:04x} but it is not {}", tag, wanted)
             }
-            TLVDecodeError::NoSuchMember(tag) => {
+            DecodeError::NoSuchMember(tag) => {
                 write!(f, "No member of template with tag 0x{:04x}", tag)
             }
         }
     }
 }
 
-impl Error for TLVDecodeError {}
+impl Error for DecodeError {}

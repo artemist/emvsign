@@ -9,14 +9,14 @@ use super::elements::ELEMENTS;
 /// supposed to use an ASN.1 IDL file to figure out what the fields mean
 ///
 /// For more information read EMV 4.4 Book 3 annex B1 and then cry.
-use super::{Field, TLVDecodeError, Value};
+use super::{DecodeError, Field, Value};
 
 /// Decode the tag and length of a TLV string. This is only useful in template,
 /// as it will use this to cut down the data to the proper size.
-pub(super) fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), TLVDecodeError> {
+pub(super) fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), DecodeError> {
     // Tag + length is always at least 2 bytes
     if raw.len() < 2 {
-        return Err(TLVDecodeError::TooShort(2, raw.len()));
+        return Err(DecodeError::TooShort(2, raw.len()));
     }
 
     // If the bottom 5 bits are set this is supposed to be a 2 byte tag
@@ -28,7 +28,7 @@ pub(super) fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), TLVDecodeError>
 
     // Length is always at least 1 byte
     if raw.len() < tag_len + 1 {
-        return Err(TLVDecodeError::TooShort(3, raw.len()));
+        return Err(DecodeError::TooShort(3, raw.len()));
     }
 
     // If the high bit of the first byte is set then it encodes how many bytes follow
@@ -37,14 +37,14 @@ pub(super) fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), TLVDecodeError>
         // This is valid to encode but we could theoretically be running on a 32 bit system
         // and would be very surprised if a credit card needed to send more than 4GiB of data.
         if num_bytes > 4 {
-            return Err(TLVDecodeError::TooLong(4, num_bytes));
+            return Err(DecodeError::TooLong(4, num_bytes));
         }
 
         // tag_len bytes for the tag, 1 byte for the number of length bytes, then num_bytes bytes
         // for the length. There _should_ be more bytes after but this could be 0 length if someone
         // messed up
         if raw.len() < tag_len + 1 + num_bytes {
-            return Err(TLVDecodeError::TooShort(tag_len + 1 + num_bytes, raw.len()));
+            return Err(DecodeError::TooShort(tag_len + 1 + num_bytes, raw.len()));
         }
 
         let mut len = 0usize;
@@ -59,29 +59,29 @@ pub(super) fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), TLVDecodeError>
     Ok((tag, len, tag_len + len_len))
 }
 
-fn read_tlv(raw: &[u8]) -> Result<(u16, usize, Value), TLVDecodeError> {
+fn read_tlv(raw: &[u8]) -> Result<(u16, usize, Value), DecodeError> {
     let (tag, len, tl_len) = read_tl(raw)?;
     if let Some(ref data_element) = ELEMENTS.get(&tag) {
         match (data_element.decoder)(&raw[tl_len..tl_len + len]) {
             Ok(value) => Ok((tag, tl_len + len, value)),
-            Err(err) => Err(TLVDecodeError::TemplateInternal(tag, Box::new(err))),
+            Err(err) => Err(DecodeError::TemplateInternal(tag, Box::new(err))),
         }
     } else {
-        Err(TLVDecodeError::UnknownTag(tag))
+        Err(DecodeError::UnknownTag(tag))
     }
 }
 
-pub fn read_field(raw: &[u8]) -> Result<Field, TLVDecodeError> {
+pub fn read_field(raw: &[u8]) -> Result<Field, DecodeError> {
     let (tag, _, value) = read_tlv(raw)?;
     Ok(Field { tag, value })
 }
 
-pub(super) fn alphabetic(raw: &[u8]) -> Result<Value, TLVDecodeError> {
+pub(super) fn alphabetic(raw: &[u8]) -> Result<Value, DecodeError> {
     let mut s = String::with_capacity(raw.len());
     for &b in raw {
         let ch = b as char;
         if !(ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z') {
-            return Err(TLVDecodeError::UnsupportedChar(
+            return Err(DecodeError::UnsupportedChar(
                 crate::tlv::errors::StringType::Alphabetic,
                 b,
             ));
@@ -91,12 +91,12 @@ pub(super) fn alphabetic(raw: &[u8]) -> Result<Value, TLVDecodeError> {
     Ok(Value::Alphabetic(s))
 }
 
-pub(super) fn alphanumeric(raw: &[u8]) -> Result<Value, TLVDecodeError> {
+pub(super) fn alphanumeric(raw: &[u8]) -> Result<Value, DecodeError> {
     let mut s = String::with_capacity(raw.len());
     for &b in raw {
         let ch = b as char;
         if !(ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9') {
-            return Err(TLVDecodeError::UnsupportedChar(
+            return Err(DecodeError::UnsupportedChar(
                 crate::tlv::errors::StringType::Alphanumeric,
                 b,
             ));
@@ -106,7 +106,7 @@ pub(super) fn alphanumeric(raw: &[u8]) -> Result<Value, TLVDecodeError> {
     Ok(Value::Alphanumeric(s))
 }
 
-pub(super) fn alphanumeric_special(raw: &[u8]) -> Result<Value, TLVDecodeError> {
+pub(super) fn alphanumeric_special(raw: &[u8]) -> Result<Value, DecodeError> {
     let mut s = String::with_capacity(raw.len());
     for &b in raw {
         // I don't even care anymore.
@@ -118,7 +118,7 @@ pub(super) fn alphanumeric_special(raw: &[u8]) -> Result<Value, TLVDecodeError> 
         // The amount of state required to propery convert that to Unicode would be terrible
         // so I won't do it unless someone sends me a card that does so.
         if b < 0x20 || b == 0x7f {
-            return Err(TLVDecodeError::UnsupportedChar(
+            return Err(DecodeError::UnsupportedChar(
                 crate::tlv::errors::StringType::AlphanumericSpecial,
                 b,
             ));
@@ -128,13 +128,13 @@ pub(super) fn alphanumeric_special(raw: &[u8]) -> Result<Value, TLVDecodeError> 
     Ok(Value::AlphanumericSpecial(s))
 }
 
-pub(super) fn binary(raw: &[u8]) -> Result<Value, TLVDecodeError> {
+pub(super) fn binary(raw: &[u8]) -> Result<Value, DecodeError> {
     Ok(Value::Binary(raw.to_vec()))
 }
 
-pub(super) fn compressed_numeric(raw: &[u8]) -> Result<Value, TLVDecodeError> {
+pub(super) fn compressed_numeric(raw: &[u8]) -> Result<Value, DecodeError> {
     if raw.len() > 10 {
-        return Err(TLVDecodeError::TooLong(10, raw.len()));
+        return Err(DecodeError::TooLong(10, raw.len()));
     }
     let mut s = String::with_capacity(raw.len() * 2);
 
@@ -147,14 +147,14 @@ pub(super) fn compressed_numeric(raw: &[u8]) -> Result<Value, TLVDecodeError> {
             } else if digit <= 0x09 {
                 s.push((b'0' + digit) as char);
             } else {
-                return Err(TLVDecodeError::BadBcd(digit));
+                return Err(DecodeError::BadBcd(digit));
             }
         }
     }
     Ok(Value::CompressedNumeric(s))
 }
 
-pub(super) fn numeric(raw: &[u8]) -> Result<Value, TLVDecodeError> {
+pub(super) fn numeric(raw: &[u8]) -> Result<Value, DecodeError> {
     let mut n = 0u128;
 
     for b in raw {
@@ -164,14 +164,14 @@ pub(super) fn numeric(raw: &[u8]) -> Result<Value, TLVDecodeError> {
             if digit <= 0x09 {
                 n = n * 10 + (digit as u128)
             } else {
-                return Err(TLVDecodeError::BadBcd(digit));
+                return Err(DecodeError::BadBcd(digit));
             }
         }
     }
     Ok(Value::Numeric(n))
 }
 
-pub(super) fn template(raw: &[u8]) -> Result<Value, TLVDecodeError> {
+pub(super) fn template(raw: &[u8]) -> Result<Value, DecodeError> {
     // This template could be empty, so no need to error
     if raw.len() == 0 {
         return Ok(Value::Template(Vec::new()));

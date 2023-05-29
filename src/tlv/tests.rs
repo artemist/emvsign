@@ -12,7 +12,7 @@ fn test_read_alphabetic() {
 fn test_read_alphabetic_unsupported_char() {
     assert_eq!(
         decoders::alphabetic(&b" OwO"[..]),
-        Err(TLVDecodeError::UnsupportedChar(
+        Err(DecodeError::UnsupportedChar(
             errors::StringType::Alphabetic,
             b' '
         ))
@@ -31,7 +31,7 @@ fn test_read_alphanumeric() {
 fn test_read_alphanumeric_unsupported_char() {
     assert_eq!(
         decoders::alphanumeric(&b"OwO_420"[..]),
-        Err(TLVDecodeError::UnsupportedChar(
+        Err(DecodeError::UnsupportedChar(
             errors::StringType::Alphanumeric,
             b'_'
         ))
@@ -50,7 +50,7 @@ fn test_read_alphanumeric_special() {
 fn test_read_alphanumeric_special_unsupported_char() {
     assert_eq!(
         decoders::alphanumeric_special(&b"OwO_420\x7f"[..]),
-        Err(TLVDecodeError::UnsupportedChar(
+        Err(DecodeError::UnsupportedChar(
             errors::StringType::AlphanumericSpecial,
             b'\x7f'
         ))
