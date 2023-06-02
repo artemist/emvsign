@@ -73,13 +73,13 @@ fn decode_with_type(typ: ElementType, raw: &[u8]) -> Result<Value, DecodeError> 
 
 fn read_tlv(raw: &[u8]) -> Result<(u16, usize, Value), DecodeError> {
     let (tag, len, tl_len) = read_tl(raw)?;
-    if let Some(ref data_element) = ELEMENTS.get(&tag) {
-        match decode_with_type(data_element.typ, &raw[tl_len..tl_len + len]) {
-            Ok(value) => Ok((tag, tl_len + len, value)),
-            Err(err) => Err(DecodeError::TemplateInternal(tag, Box::new(err))),
-        }
-    } else {
-        Err(DecodeError::UnknownTag(tag))
+    let typ = ELEMENTS
+        .get(&tag)
+        .map(|&elem| elem.typ)
+        .unwrap_or(ElementType::Binary);
+    match decode_with_type(typ, &raw[tl_len..tl_len + len]) {
+        Ok(value) => Ok((tag, tl_len + len, value)),
+        Err(err) => Err(DecodeError::TemplateInternal(tag, Box::new(err))),
     }
 }
 

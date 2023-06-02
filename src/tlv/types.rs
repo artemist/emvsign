@@ -35,13 +35,14 @@ impl Value {
             Value::Alphanumeric(s) => write!(f, "an\"{}\"", s),
             Value::AlphanumericSpecial(s) => write!(f, "ans\"{}\"", s),
             Value::Binary(data) => {
+                write!(f, "0x")?;
                 for b in data {
                     write!(f, "{:02x}", b)?;
                 }
                 Ok(())
             }
-            Value::CompressedNumeric(n) => write!(f, "{}", n),
-            Value::Numeric(n) => write!(f, "{}", n),
+            Value::CompressedNumeric(n) => write!(f, "cn{}", n),
+            Value::Numeric(n) => write!(f, "n{}", n),
             Value::Template(fields) => {
                 for field in fields {
                     field.fmt(f, indent + 1)?;

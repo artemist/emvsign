@@ -1,4 +1,9 @@
-use crate::exchange::{exchange, ADPUCommand};
+use anyhow::Context;
+
+use crate::{
+    exchange::{exchange, ADPUCommand},
+    tlv,
+};
 
 pub fn print_dol(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Result<()> {
     let select_command = ADPUCommand {
@@ -20,6 +25,10 @@ pub fn print_dol(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Result<()> {
     for b in &response {
         print!("{:02x}", b);
     }
+    println!("");
+
+    let fci = tlv::read_field(&response).context("Failed to parse FCI")?;
+    println!("{}", fci);
 
     Ok(())
 }
