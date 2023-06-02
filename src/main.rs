@@ -1,5 +1,6 @@
 use anyhow::Context;
 use structopt::StructOpt;
+mod dol;
 mod exchange;
 mod pse;
 mod tlv;
@@ -28,10 +29,10 @@ struct Options {
 enum Command {
     #[structopt(about = "List connected readers")]
     ListReaders,
-    #[structopt(about = "Get the public key")]
-    GetKey,
     #[structopt(about = "Show data contained in the PSE")]
     ShowPSE,
+    #[structopt(about = "Get the public key")]
+    GetKey,
 }
 fn main() -> anyhow::Result<()> {
     let options = Options::from_args();
@@ -51,7 +52,23 @@ fn main() -> anyhow::Result<()> {
             res?;
             Ok(())
         }
-        Command::GetKey => unimplemented!(),
+        Command::GetKey => {
+            let mut card = get_card(&options, &context).context("Failed to connect to card")?;
+            let pse_data = pse::list_applications(&mut card, &options.pse)?;
+            let aid = &pse_data
+                .applications
+                .get(0)
+                .ok_or_else(|| anyhow::anyhow!("No applications in PSE"))?
+                .aid;
+
+            dol::print_dol(&mut card, &aid)?;
+
+            // Reset the card because we could be in a PIN authenticated state
+            if card.disconnect(pcsc::Disposition::ResetCard).is_err() {
+                eprintln!("Failed to reset card, you may need to manually unplug the card");
+            }
+            Ok(())
+        }
     }
 }
 
