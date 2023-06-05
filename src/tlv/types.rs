@@ -71,7 +71,7 @@ impl Value {
                 _ => return Err(DecodeError::WrongType(last_tag, "Template")),
             }
         }
-        return Ok(curr_template);
+        Ok(curr_template)
     }
 
     pub fn get_path_owned(self, path: &[u16]) -> Result<Value, DecodeError> {
@@ -93,7 +93,7 @@ impl Value {
                 _ => return Err(DecodeError::WrongType(last_tag, "Template")),
             }
         }
-        return Ok(curr_template);
+        Ok(curr_template)
     }
 }
 
@@ -108,22 +108,22 @@ impl Field {
         write!(f, "{:width$}", "", width = indent * 4)?;
         let tag_name = super::elements::ELEMENTS
             .get(&self.tag)
-            .and_then(|elem| Some(elem.name))
+            .map(|elem| elem.name)
             .unwrap_or("");
         if matches!(self.value, Value::Template(_)) {
-            write!(f, "0x{:04x} (\"{}\") => {{\n", self.tag, tag_name)?;
+            writeln!(f, "0x{:04x} (\"{}\") => {{", self.tag, tag_name)?;
             self.value.fmt(f, indent + 1)?;
-            write!(f, "{:width$}}},\n", "", width = indent * 4)
+            writeln!(f, "{:width$}}},", "", width = indent * 4)
         } else {
-            write!(
+            writeln!(
                 f,
-                "0x{:04x} (\"{}\") => {},\n",
+                "0x{:04x} (\"{}\") => {},",
                 self.tag, tag_name, self.value
             )
         }
     }
     pub fn get_path(&self, path: &[u16]) -> Result<&Value, DecodeError> {
-        if path.len() == 0 {
+        if path.is_empty() {
             Err(DecodeError::NoPathRequested)
         } else if self.tag != path[0] {
             Err(DecodeError::NoSuchMember(path[0]))
@@ -133,7 +133,7 @@ impl Field {
     }
 
     pub fn get_path_owned(self, path: &[u16]) -> Result<Value, DecodeError> {
-        if path.len() == 0 {
+        if path.is_empty() {
             Err(DecodeError::NoPathRequested)
         } else if self.tag != path[0] {
             Err(DecodeError::NoSuchMember(path[0]))
@@ -144,7 +144,7 @@ impl Field {
 
     pub fn get_path_binary(&self, path: &[u16]) -> Result<&[u8], DecodeError> {
         match self.get_path(path)? {
-            Value::Binary(b) => Ok(&b),
+            Value::Binary(b) => Ok(b),
             _ => Err(DecodeError::WrongType(path[path.len() - 1], "Binary")),
         }
     }
@@ -158,10 +158,10 @@ impl Field {
 
     pub fn get_path_string(&self, path: &[u16]) -> Result<&str, DecodeError> {
         match self.get_path(path)? {
-            Value::Alphabetic(s) => Ok(&s),
-            Value::Alphanumeric(s) => Ok(&s),
-            Value::AlphanumericSpecial(s) => Ok(&s),
-            Value::CompressedNumeric(s) => Ok(&s),
+            Value::Alphabetic(s) => Ok(s),
+            Value::Alphanumeric(s) => Ok(s),
+            Value::AlphanumericSpecial(s) => Ok(s),
+            Value::CompressedNumeric(s) => Ok(s),
             _ => Err(DecodeError::WrongType(path[path.len() - 1], "String")),
         }
     }

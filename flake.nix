@@ -41,7 +41,7 @@
         };
 
         devShells.emvsign = with pkgs; mkShell {
-          packages = [ pkgconfig rustc cargo pcsclite];
+          packages = [ pkgconfig rustc cargo clippy pcsclite ];
         };
         devShell = devShells.emvsign;
       })) // {

@@ -69,12 +69,12 @@ pub struct PSEData {
 
 pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<PSEData> {
     let pse_command = ADPUCommand {
-        cla: 0x00,             // Interindustry command
-        ins: 0xa4,             // SELECT
-        p1: 0x04,              // Select by name
-        p2: 0x00,              // 1st element
-        data: &pse.as_bytes(), // PSE name
-        ne: 0x100,             // 256 bytes, the card will correct us
+        cla: 0x00,            // Interindustry command
+        ins: 0xa4,            // SELECT
+        p1: 0x04,             // Select by name
+        p2: 0x00,             // 1st element
+        data: pse.as_bytes(), // PSE name
+        ne: 0x100,            // 256 bytes, the card will correct us
     };
     let (response, sw) = exchange(card, &pse_command)?;
 

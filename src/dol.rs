@@ -25,7 +25,7 @@ pub fn print_dol(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Result<()> {
     for b in &response {
         print!("{:02x}", b);
     }
-    println!("");
+    println!();
 
     let fci = tlv::read_field(&response).context("Failed to parse FCI")?;
     println!("{}", fci);

@@ -77,7 +77,7 @@ pub fn exchange(card: &mut pcsc::Card, command: &ADPUCommand) -> anyhow::Result<
 
     if sw1 == 0x6c {
         // Reduce data size requested
-        let mut modified_command = command.clone();
+        let mut modified_command = *command;
         modified_command.ne = sw2 as u32;
 
         let data = tx

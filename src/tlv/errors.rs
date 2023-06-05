@@ -14,7 +14,6 @@ pub enum DecodeError {
     TemplateInternal(u16, Box<DecodeError>),
     TooLong(usize, usize),
     TooShort(usize, usize),
-    UnknownTag(u16),
     UnsupportedChar(StringType, u8),
     NoPathRequested,
     WrongType(u16, &'static str),
@@ -36,7 +35,6 @@ impl Display for DecodeError {
             DecodeError::TooLong(needed, got) => {
                 write!(f, "Length too long, needed {}, got {}", needed, got)
             }
-            DecodeError::UnknownTag(tag) => write!(f, "Found unknown tag 0x{:04x}", tag),
             DecodeError::TemplateInternal(tag, ref err) => {
                 write!(f, "Error while processing tag 0x{:04x}: {}", tag, err)
             }

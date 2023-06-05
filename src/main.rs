@@ -61,7 +61,7 @@ fn main() -> anyhow::Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("No applications in PSE"))?
                 .aid;
 
-            dol::print_dol(&mut card, &aid)?;
+            dol::print_dol(&mut card, aid)?;
 
             // Reset the card because we could be in a PIN authenticated state
             if card.disconnect(pcsc::Disposition::ResetCard).is_err() {

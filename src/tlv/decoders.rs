@@ -92,7 +92,7 @@ pub(super) fn alphabetic(raw: &[u8]) -> Result<Value, DecodeError> {
     let mut s = String::with_capacity(raw.len());
     for &b in raw {
         let ch = b as char;
-        if !(ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z') {
+        if !ch.is_ascii_alphabetic() {
             return Err(DecodeError::UnsupportedChar(
                 crate::tlv::errors::StringType::Alphabetic,
                 b,
@@ -107,7 +107,7 @@ pub(super) fn alphanumeric(raw: &[u8]) -> Result<Value, DecodeError> {
     let mut s = String::with_capacity(raw.len());
     for &b in raw {
         let ch = b as char;
-        if !(ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9') {
+        if !ch.is_ascii_alphanumeric() {
             return Err(DecodeError::UnsupportedChar(
                 crate::tlv::errors::StringType::Alphanumeric,
                 b,
@@ -185,7 +185,7 @@ pub(super) fn numeric(raw: &[u8]) -> Result<Value, DecodeError> {
 
 pub(super) fn template(raw: &[u8]) -> Result<Value, DecodeError> {
     // This template could be empty, so no need to error
-    if raw.len() == 0 {
+    if raw.is_empty() {
         return Ok(Value::Template(Vec::new()));
     }
 
