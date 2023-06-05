@@ -68,15 +68,7 @@ pub struct PSEData {
 }
 
 pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<PSEData> {
-    let pse_command = ADPUCommand {
-        cla: 0x00,            // Interindustry command
-        ins: 0xa4,            // SELECT
-        p1: 0x04,             // Select by name
-        p2: 0x00,             // 1st element
-        data: pse.as_bytes(), // PSE name
-        ne: 0x100,            // 256 bytes, the card will correct us
-    };
-    let (response, sw) = exchange(card, &pse_command)?;
+    let (response, sw) = exchange(card, &ADPUCommand::select(pse.as_bytes()))?;
 
     if sw != 0x9000 {
         anyhow::bail!(
@@ -101,15 +93,7 @@ pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<PSE
         }
 
         for rec in 1..16 {
-            let sfi_command = ADPUCommand {
-                cla: 0x00,             // Interindustry command
-                ins: 0xb2,             // READ RECORD
-                p1: rec,               // Record number
-                p2: (sfi << 3) | 0x04, // SFI, P1 is a record number
-                data: &[],             // No data
-                ne: 0x100,             // 256 bytes, the card will correct us
-            };
-            let (sfi_response, sfi_sw) = exchange(card, &sfi_command)?;
+            let (sfi_response, sfi_sw) = exchange(card, &ADPUCommand::read_record(sfi, rec))?;
             println!("SFI {:02x} rec {:02x} ({:04x})", b[0], rec, sfi_sw);
             if sfi_sw == 0x9000 {
                 let record = tlv::read_field(&sfi_response).with_context(|| {

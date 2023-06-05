@@ -25,7 +25,7 @@ impl ADPUCommand<'_> {
         if nc == 0 {
             // Do nothing, Lc is empty
         } else if nc <= 255 {
-            raw.push(nc as u8)
+            raw.push(nc as u8);
         } else if nc <= 65535 {
             raw.push(0u8);
             raw.extend_from_slice(&(nc as u16).to_be_bytes());
@@ -39,16 +39,38 @@ impl ADPUCommand<'_> {
             // Do nothing, Le is empty
         } else if self.ne <= 256 {
             // 256 will be 0x100 which we truncate to 0x00. This is correct.
-            raw.push(self.ne as u8)
+            raw.push(self.ne as u8);
         } else if self.ne <= 65536 {
             // 65536 will be 0x10000 which we truncate to 0x0000. This is correct.
             if nc <= 255 {
                 raw.push(0u8);
             }
-            raw.extend_from_slice(&(self.ne as u16).to_be_bytes())
+            raw.extend_from_slice(&(self.ne as u16).to_be_bytes());
         }
 
         Some(raw.into_boxed_slice())
+    }
+
+    pub fn select(aid: &[u8]) -> ADPUCommand {
+        ADPUCommand {
+            cla: 0x00, // Interindustry command
+            ins: 0xa4, // SELECT
+            p1: 0x04,  // Select by name
+            p2: 0x00,  // 1st element
+            data: aid, // AID
+            ne: 0x100, // 256 bytes, the card will correct us
+        }
+    }
+
+    pub fn read_record(sfi: u8, record: u8) -> ADPUCommand<'static> {
+        ADPUCommand {
+            cla: 0x00,             // Interindustry command
+            ins: 0xb2,             // READ RECORD
+            p1: record,            // Record number
+            p2: (sfi << 3) | 0x04, // SFI, P1 is a record number
+            data: &[],             // No data
+            ne: 0x100,             // 256 bytes, the card will correct us
+        }
     }
 }
 

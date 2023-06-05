@@ -6,15 +6,7 @@ use crate::{
 };
 
 pub fn print_dol(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Result<()> {
-    let select_command = ADPUCommand {
-        cla: 0x00,
-        ins: 0xa4,
-        p1: 0x04,
-        p2: 0x00,
-        data: aid,
-        ne: 0x100,
-    };
-    let (response, sw) = exchange(card, &select_command)?;
+    let (response, sw) = exchange(card, &ADPUCommand::select(aid))?;
     if sw != 0x9000 {
         anyhow::bail!(
             "Failure returned by card while selecting payment app: 0x{:04x}",
@@ -22,10 +14,16 @@ pub fn print_dol(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Result<()> {
         );
     }
 
-    for b in &response {
-        print!("{:02x}", b);
+    let fci = tlv::read_field(&response).context("Failed to parse FCI")?;
+    println!("{}", fci);
+
+    let (response, sw) = exchange(card, &ADPUCommand::read_record(1, 1))?;
+    if sw != 0x9000 {
+        anyhow::bail!(
+            "Failure returned by card while reading record: 0x{:04x}",
+            sw
+        );
     }
-    println!();
 
     let fci = tlv::read_field(&response).context("Failed to parse FCI")?;
     println!("{}", fci);
