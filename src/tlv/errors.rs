@@ -12,8 +12,8 @@ pub enum StringType {
 pub enum DecodeError {
     BadBcd(u8),
     TemplateInternal(u16, Box<DecodeError>),
-    TooLong(usize, usize),
-    TooShort(usize, usize),
+    LengthTooLong(usize, usize),
+    MessageTooShort(usize, usize),
     UnsupportedChar(StringType, u8),
     NoPathRequested,
     WrongType(u16, &'static str),
@@ -29,10 +29,10 @@ impl Display for DecodeError {
                 "Unsupported character 0x{:02x} in {:?} string",
                 ch, string_type
             ),
-            DecodeError::TooShort(needed, got) => {
+            DecodeError::MessageTooShort(needed, got) => {
                 write!(f, "Message too short, needed {}, got {}", needed, got)
             }
-            DecodeError::TooLong(needed, got) => {
+            DecodeError::LengthTooLong(needed, got) => {
                 write!(f, "Length too long, needed {}, got {}", needed, got)
             }
             DecodeError::TemplateInternal(tag, ref err) => {

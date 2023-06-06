@@ -73,20 +73,15 @@ impl Value {
         let mut curr_template = self;
 
         let mut last_tag = 0;
-        'outer: for tag in path {
-            match curr_template {
-                Value::Template(fields) => {
-                    for field in fields {
-                        if field.tag == *tag {
-                            curr_template = &field.value;
-                            last_tag = *tag;
-                            continue 'outer;
-                        }
-                    }
-                    return Err(DecodeError::NoSuchMember(*tag));
-                }
-                _ => return Err(DecodeError::WrongType(last_tag, "Template")),
-            }
+        for tag in path {
+            let Value::Template(fields) = curr_template else {
+                return Err(DecodeError::WrongType(last_tag, "Template"));
+            };
+            let Some(field) = fields.iter().find(|field| field.tag == *tag) else {
+                return Err(DecodeError::NoSuchMember(*tag));
+            };
+            curr_template = &field.value;
+            last_tag = *tag;
         }
         Ok(curr_template)
     }
@@ -95,20 +90,15 @@ impl Value {
         let mut curr_template = self;
 
         let mut last_tag = 0;
-        'outer: for tag in path {
-            match curr_template {
-                Value::Template(fields) => {
-                    for field in fields {
-                        if field.tag == *tag {
-                            curr_template = field.value;
-                            last_tag = *tag;
-                            continue 'outer;
-                        }
-                    }
-                    return Err(DecodeError::NoSuchMember(*tag));
-                }
-                _ => return Err(DecodeError::WrongType(last_tag, "Template")),
-            }
+        for tag in path {
+            let Value::Template(fields) = curr_template else {
+                return Err(DecodeError::WrongType(last_tag, "Template"));
+            };
+            let Some(field) = fields.into_iter().find(|field| field.tag == *tag) else {
+                return Err(DecodeError::NoSuchMember(*tag));
+            };
+            curr_template = field.value;
+            last_tag = *tag;
         }
         Ok(curr_template)
     }
@@ -125,8 +115,7 @@ impl Field {
         write!(f, "{:width$}", "", width = indent * 4)?;
         let tag_name = super::elements::ELEMENTS
             .get(&self.tag)
-            .map(|elem| elem.name)
-            .unwrap_or("");
+            .map_or("", |elem| elem.name);
         if matches!(self.value, Value::Template(_)) {
             writeln!(f, "0x{:04x} (\"{}\") => {{", self.tag, tag_name)?;
             self.value.fmt(f, indent + 1)?;
@@ -140,22 +129,18 @@ impl Field {
         }
     }
     pub fn get_path(&self, path: &[u16]) -> Result<&Value, DecodeError> {
-        if path.is_empty() {
-            Err(DecodeError::NoPathRequested)
-        } else if self.tag != path[0] {
-            Err(DecodeError::NoSuchMember(path[0]))
-        } else {
-            self.value.get_path(&path[1..])
+        match path {
+            [] => Err(DecodeError::NoPathRequested),
+            [tag, ..] if *tag != self.tag => Err(DecodeError::NoSuchMember(*tag)),
+            [_, remaining @ ..] => self.value.get_path(remaining),
         }
     }
 
     pub fn get_path_owned(self, path: &[u16]) -> Result<Value, DecodeError> {
-        if path.is_empty() {
-            Err(DecodeError::NoPathRequested)
-        } else if self.tag != path[0] {
-            Err(DecodeError::NoSuchMember(path[0]))
-        } else {
-            self.value.get_path_owned(&path[1..])
+        match path {
+            [] => Err(DecodeError::NoPathRequested),
+            [tag, ..] if *tag != self.tag => Err(DecodeError::NoSuchMember(*tag)),
+            [_, remaining @ ..] => self.value.get_path_owned(remaining),
         }
     }
 

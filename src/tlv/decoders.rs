@@ -9,53 +9,62 @@ use super::elements::{ElementType, ELEMENTS};
 /// supposed to use an ASN.1 IDL file to figure out what the fields mean
 ///
 /// For more information read EMV 4.4 Book 3 annex B1 and then cry.
-use super::{DecodeError, Field, Value};
+use super::{errors, DecodeError, Field, Value};
+
+use std::str;
+
+fn left_pad_slice<const LEN: usize>(slice: &[u8]) -> [u8; LEN] {
+    let mut s = [0; LEN];
+    s[LEN - slice.len()..].copy_from_slice(slice);
+    s
+}
 
 /// Decode the tag and length of a TLV string. This is only useful in template,
 /// as it will use this to cut down the data to the proper size.
 pub(super) fn read_tl(raw: &[u8]) -> Result<(u16, usize, usize), DecodeError> {
-    // Tag + length is always at least 2 bytes
-    if raw.len() < 2 {
-        return Err(DecodeError::TooShort(2, raw.len()));
+    if raw.is_empty() {
+        // Tag + length is always at least 2 bytes
+        return Err(DecodeError::MessageTooShort(2, raw.len()));
     }
 
     // If the bottom 5 bits are set this is supposed to be a 2 byte tag
-    let (tag, tag_len) = if raw[0] & 0x1f == 0x1f {
-        (u16::from_be_bytes(raw[..2].try_into().unwrap()), 2)
-    } else {
-        (raw[0] as u16, 1)
-    };
+    let tag_len = if raw[0] & 0b11111 == 0b11111 { 2 } else { 1 };
 
     // Length is always at least 1 byte
     if raw.len() < tag_len + 1 {
-        return Err(DecodeError::TooShort(3, raw.len()));
+        return Err(DecodeError::MessageTooShort(tag_len + 1, raw.len()));
     }
 
-    // If the high bit of the first byte is set then it encodes how many bytes follow
-    let (len, len_len) = if raw[tag_len] & 0x80 == 0x80 {
-        let num_bytes = (raw[tag_len] & 0x7f) as usize;
-        // This is valid to encode but we could theoretically be running on a 32 bit system
-        // and would be very surprised if a credit card needed to send more than 4GiB of data.
-        if num_bytes > 4 {
-            return Err(DecodeError::TooLong(4, num_bytes));
-        }
+    let (tag_bytes, length_bytes) = raw.split_at(tag_len);
 
-        // tag_len bytes for the tag, 1 byte for the number of length bytes, then num_bytes bytes
-        // for the length. There _should_ be more bytes after but this could be 0 length if someone
-        // messed up
-        if raw.len() < tag_len + 1 + num_bytes {
-            return Err(DecodeError::TooShort(tag_len + 1 + num_bytes, raw.len()));
-        }
+    let (len, len_len) = match length_bytes {
+        // Checked above
+        [] => unreachable!(),
+        [len_len_byte, length_bytes @ ..] if len_len_byte & 0x80 == 0x80 => {
+            let num_bytes = (len_len_byte & 0x7f) as usize;
+            // This is valid to encode but we could theoretically be running on a 32 bit system
+            // and would be very surprised if a credit card needed to send more than 4GiB of data.
+            if num_bytes > 4 {
+                return Err(DecodeError::LengthTooLong(4, num_bytes));
+            }
 
-        let mut len = 0usize;
-        for b in &raw[tag_len + 1..tag_len + 1 + num_bytes] {
-            len = (len << 8) | (*b as usize);
+            // tag_len bytes for the tag, 1 byte for the number of length bytes, then num_bytes bytes
+            // for the length. There _should_ be more bytes after but this could be 0 length if someone
+            // messed up
+            if length_bytes.len() < num_bytes {
+                return Err(DecodeError::MessageTooShort(
+                    tag_len + 1 + num_bytes,
+                    raw.len(),
+                ));
+            }
+
+            let len = usize::from_be_bytes(left_pad_slice(&length_bytes[..num_bytes]));
+            (len, num_bytes + 1)
         }
-        (len, num_bytes + 1)
-    } else {
-        (raw[tag_len] as usize, 1)
+        [length, ..] => (*length as usize, 1),
     };
 
+    let tag = u16::from_be_bytes(left_pad_slice(tag_bytes));
     Ok((tag, len, tag_len + len_len))
 }
 
@@ -77,10 +86,9 @@ fn read_tlv(raw: &[u8]) -> Result<(u16, usize, Value), DecodeError> {
         .get(&tag)
         .map(|&elem| elem.typ)
         .unwrap_or(ElementType::Binary);
-    match decode_with_type(typ, &raw[tl_len..tl_len + len]) {
-        Ok(value) => Ok((tag, tl_len + len, value)),
-        Err(err) => Err(DecodeError::TemplateInternal(tag, Box::new(err))),
-    }
+    let value = decode_with_type(typ, &raw[tl_len..][..len])
+        .map_err(|err| DecodeError::TemplateInternal(tag, Box::new(err)))?;
+    Ok((tag, tl_len + len, value))
 }
 
 pub fn read_field(raw: &[u8]) -> Result<Field, DecodeError> {
@@ -88,34 +96,36 @@ pub fn read_field(raw: &[u8]) -> Result<Field, DecodeError> {
     Ok(Field { tag, value })
 }
 
-pub(super) fn alphabetic(raw: &[u8]) -> Result<Value, DecodeError> {
-    let mut s = String::with_capacity(raw.len());
-    for &b in raw {
-        let ch = b as char;
-        if !ch.is_ascii_alphabetic() {
-            return Err(DecodeError::UnsupportedChar(
-                crate::tlv::errors::StringType::Alphabetic,
-                b,
-            ));
-        }
-        s.push(ch);
+fn restricted_charset(
+    raw: &[u8],
+    predicate: impl Fn(&u8) -> bool,
+    string_type: crate::tlv::errors::StringType,
+    value_wrapper: impl Fn(String) -> Value,
+) -> Result<Value, DecodeError> {
+    if let Some(&bad_char) = raw.iter().find(|&b| !predicate(b)) {
+        Err(DecodeError::UnsupportedChar(string_type, bad_char))
+    } else {
+        let string = str::from_utf8(raw).unwrap().to_owned();
+        Ok(value_wrapper(string))
     }
-    Ok(Value::Alphabetic(s))
+}
+
+pub(super) fn alphabetic(raw: &[u8]) -> Result<Value, DecodeError> {
+    restricted_charset(
+        raw,
+        u8::is_ascii_alphabetic,
+        errors::StringType::Alphabetic,
+        Value::Alphabetic,
+    )
 }
 
 pub(super) fn alphanumeric(raw: &[u8]) -> Result<Value, DecodeError> {
-    let mut s = String::with_capacity(raw.len());
-    for &b in raw {
-        let ch = b as char;
-        if !ch.is_ascii_alphanumeric() {
-            return Err(DecodeError::UnsupportedChar(
-                crate::tlv::errors::StringType::Alphanumeric,
-                b,
-            ));
-        }
-        s.push(ch);
-    }
-    Ok(Value::Alphanumeric(s))
+    restricted_charset(
+        raw,
+        u8::is_ascii_alphanumeric,
+        errors::StringType::Alphanumeric,
+        Value::Alphanumeric,
+    )
 }
 
 pub(super) fn alphanumeric_special(raw: &[u8]) -> Result<Value, DecodeError> {
@@ -146,54 +156,38 @@ pub(super) fn binary(raw: &[u8]) -> Result<Value, DecodeError> {
 
 pub(super) fn compressed_numeric(raw: &[u8]) -> Result<Value, DecodeError> {
     if raw.len() > 10 {
-        return Err(DecodeError::TooLong(10, raw.len()));
+        return Err(DecodeError::LengthTooLong(10, raw.len()));
     }
     let mut s = String::with_capacity(raw.len() * 2);
 
-    'outer: for b in raw {
-        let hi = b >> 4;
-        let lo = b & 0x0f;
-        for digit in [hi, lo] {
-            if digit == 0x0f {
-                break 'outer;
-            } else if digit <= 0x09 {
-                s.push((b'0' + digit) as char);
-            } else {
-                return Err(DecodeError::BadBcd(digit));
-            }
+    for digit in raw.iter().flat_map(|byte| [byte >> 4, byte & 0x0f]) {
+        if digit == 0x0f {
+            break;
         }
+        s.push(char::from_digit(digit as u32, 10).ok_or(DecodeError::BadBcd(digit))?);
     }
     Ok(Value::CompressedNumeric(s))
 }
 
 pub(super) fn numeric(raw: &[u8]) -> Result<Value, DecodeError> {
-    let mut n = 0u128;
-
-    for b in raw {
-        let hi = b >> 4;
-        let lo = b & 0x0f;
-        for digit in [hi, lo] {
-            if digit <= 0x09 {
-                n = n * 10 + (digit as u128)
-            } else {
-                return Err(DecodeError::BadBcd(digit));
-            }
-        }
-    }
-    Ok(Value::Numeric(n))
+    Ok(Value::Numeric(
+        raw.iter()
+            .flat_map(|byte| [byte >> 4, byte & 0x0f])
+            .try_fold(0, |acc, digit| {
+                if digit <= 9 {
+                    Ok(acc * 10 + digit as u128) //TODO handle overflow
+                } else {
+                    Err(DecodeError::BadBcd(digit))
+                }
+            })?,
+    ))
 }
 
-pub(super) fn template(raw: &[u8]) -> Result<Value, DecodeError> {
-    // This template could be empty, so no need to error
-    if raw.is_empty() {
-        return Ok(Value::Template(Vec::new()));
-    }
-
-    let mut offset = 0;
+pub(super) fn template(mut raw: &[u8]) -> Result<Value, DecodeError> {
     let mut fields = Vec::new();
-    while offset < raw.len() {
-        let (tag, len, value) = read_tlv(&raw[offset..])?;
-        offset += len;
+    while !raw.is_empty() {
+        let (tag, len, value) = read_tlv(raw)?;
+        raw = &raw[len..];
         fields.push(Field { tag, value });
     }
     Ok(Value::Template(fields))
