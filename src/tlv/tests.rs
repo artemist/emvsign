@@ -77,3 +77,35 @@ fn test_parse_ddt() {
         }
     )
 }
+
+#[test]
+fn test_read_tl_empty() {
+    assert_eq!(
+        super::decoders::read_tl(&b"\x80\x00"[..]).unwrap(),
+        (0x80, 0, 2)
+    )
+}
+
+#[test]
+fn test_read_tl_long_tag() {
+    assert_eq!(
+        super::decoders::read_tl(&b"\x7f\x99\x02\x12\x34"[..]).unwrap(),
+        (0x7f99, 2, 3)
+    )
+}
+
+#[test]
+fn test_read_tl_ff_length() {
+    assert_eq!(
+        super::decoders::read_tl(&b"\x80\x81\xff"[..]).unwrap(),
+        (0x80, 0xff, 3)
+    )
+}
+
+#[test]
+fn test_read_tl_lorge() {
+    assert_eq!(
+        super::decoders::read_tl(&b"\x7f\x99\x84\xff\xff\xff\xff"[..]).unwrap(),
+        (0x7f99, 0xffff_ffff, 7)
+    )
+}
