@@ -46,7 +46,7 @@ pub fn print_dol(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Result<()> {
             if resp.len() < 6 {
                 anyhow::bail!("Failed to read AIP and AFL!");
             }
-            (&resp[..2], &resp[2..])
+            resp.split_at(2)
         }
         tag => {
             anyhow::bail!("Got tag {:04x} when trying to read AIP and AFL", tag);
