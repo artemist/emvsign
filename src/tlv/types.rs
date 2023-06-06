@@ -52,6 +52,23 @@ impl Value {
         }
     }
 
+    pub fn get_template(&self) -> Option<&[Field]> {
+        match self {
+            Value::Template(fields) => Some(fields),
+            _ => None,
+        }
+    }
+
+    pub fn get_string(&self) -> Option<&str> {
+        match self {
+            Value::Alphabetic(s) => Some(s),
+            Value::Alphanumeric(s) => Some(s),
+            Value::AlphanumericSpecial(s) => Some(s),
+            Value::CompressedNumeric(s) => Some(s),
+            _ => None,
+        }
+    }
+
     pub fn get_path(&self, path: &[u16]) -> Result<&Value, DecodeError> {
         let mut curr_template = self;
 

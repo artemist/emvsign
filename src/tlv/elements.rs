@@ -138,7 +138,7 @@ lazy_static! {
                 tag: 0x0077,
                 name: "Response Message Template Format 2",
                 short_name: None,
-                typ: ElementType::Binary,
+                typ: ElementType::Template,
             }
         ),
         (
@@ -390,7 +390,7 @@ lazy_static! {
                 tag: 0x5f20,
                 name: "Cardholder Name",
                 short_name: None,
-                typ: ElementType::Binary,
+                typ: ElementType::AlphanumericSpecial,
             }
         ),
         (
@@ -426,7 +426,7 @@ lazy_static! {
                 tag: 0x5f2a,
                 name: "Transaction Currency Code",
                 short_name: None,
-                typ: ElementType::Binary,
+                typ: ElementType::Numeric,
             }
         ),
         (

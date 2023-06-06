@@ -72,6 +72,17 @@ impl ADPUCommand<'_> {
             ne: 0x100,             // 256 bytes, the card will correct us
         }
     }
+
+    pub fn get_processing_options(pdol: &[u8]) -> ADPUCommand {
+        ADPUCommand {
+            cla: 0x80,  // Propriatery command
+            ins: 0xa8,  // GET PROCESSING OPTIONS
+            p1: 0x00,   // The only non-RFU value
+            p2: 0x00,   // The only non-RFU value
+            data: pdol, // Processing Data Object List, may be empty
+            ne: 0x100,  // 256 bytes, the card will correct us
+        }
+    }
 }
 
 pub fn exchange(card: &mut pcsc::Card, command: &ADPUCommand) -> anyhow::Result<(Vec<u8>, u16)> {
