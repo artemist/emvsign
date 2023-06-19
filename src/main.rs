@@ -1,7 +1,7 @@
 use anyhow::Context;
 use structopt::StructOpt;
-mod dol;
 mod exchange;
+mod processing_options;
 mod pse;
 mod tlv;
 
@@ -61,7 +61,7 @@ fn main() -> anyhow::Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("No applications in PSE"))?
                 .aid;
 
-            dol::print_dol(&mut card, aid)?;
+            processing_options::read_processing_options(&mut card, aid)?;
 
             // Reset the card because we could be in a PIN authenticated state
             if card.disconnect(pcsc::Disposition::ResetCard).is_err() {

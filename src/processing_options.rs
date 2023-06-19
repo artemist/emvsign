@@ -5,7 +5,7 @@ use crate::{
     tlv,
 };
 
-pub fn print_dol(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Result<()> {
+pub fn read_processing_options(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Result<tlv::Value> {
     let (response, sw) = exchange(card, &ADPUCommand::select(aid))?;
     if sw != 0x9000 {
         anyhow::bail!(
@@ -76,12 +76,7 @@ pub fn print_dol(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Result<()> {
         }
     }
 
-    let application_info = tlv::Field {
-        // READ RECORD Response Message Template
-        // a tlv::Field is easy to do stuff with and 0x70 makes the most sense.
-        tag: 0x70,
-        value: tlv::Value::Template(card_info),
-    };
-    println!("{}", application_info);
-    Ok(())
+    let ret = tlv::Value::Template(card_info);
+    println!("{}", ret);
+    Ok(ret)
 }
