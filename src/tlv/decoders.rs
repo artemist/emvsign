@@ -1,3 +1,4 @@
+use super::dol::Dol;
 use super::elements::{ElementType, ELEMENTS};
 /// Decode what EMV calls "BER-TLV"
 /// This is a TLV (Tag, Length, Value) format where
@@ -77,6 +78,7 @@ fn decode_with_type(typ: ElementType, raw: &[u8]) -> Result<Value, DecodeError> 
         ElementType::CompressedNumeric => compressed_numeric(raw),
         ElementType::Numeric => numeric(raw),
         ElementType::Template => template(raw),
+        ElementType::Dol => dol(raw),
     }
 }
 
@@ -191,4 +193,8 @@ pub(super) fn template(mut raw: &[u8]) -> Result<Value, DecodeError> {
         fields.push(Field { tag, value });
     }
     Ok(Value::Template(fields))
+}
+
+pub(super) fn dol(raw: &[u8]) -> Result<Value, DecodeError> {
+    Dol::try_from(raw).map(Value::Dol)
 }

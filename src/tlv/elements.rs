@@ -12,6 +12,7 @@ pub enum ElementType {
     CompressedNumeric,
     Numeric,
     Template,
+    Dol,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -77,8 +78,8 @@ lazy_static! {
         0x0088 => "Short File Identifier (SFI)": Binary,
         0x0089 => "Authorisation Code": Binary,
         0x008a => "Authorisation Response Code": Binary,
-        0x008c => "Card Risk Management Data Object List 1 (CDOL1)": Binary,
-        0x008d => "Card Risk Management Data Object List 2 (CDOL2)": Binary,
+        0x008c => "Card Risk Management Data Object List 1 (CDOL1)": Dol,
+        0x008d => "Card Risk Management Data Object List 2 (CDOL2)": Dol,
         0x008e => "Cardholder Verification Method (CVM) List": Binary,
         0x008f => "Certification Authority Public Key Index": Binary,
         0x0090 => "Issuer Public Key Certificate": Binary,
@@ -87,7 +88,7 @@ lazy_static! {
         0x0093 => "Signed Static Application Data": Binary,
         0x0094 => "Application File Locator (AFL)": Binary,
         0x0095 => "Terminal Verification Results": Binary,
-        0x0097 => "Transaction Certificate Data Object List (TDOL)": Binary,
+        0x0097 => "Transaction Certificate Data Object List (TDOL)": Dol,
         0x0098 => "Transaction Certificate (TC) Hash Value": Binary,
         0x009a => "Transaction Date": Binary,
         0x009b => "Transaction Status Information": Binary,
@@ -150,7 +151,7 @@ lazy_static! {
         0x9f35 => "Terminal Type": Binary,
         0x9f36 => "Application Transaction Counter (ATC)": Binary,
         0x9f37 => "Unpredictable Number": Binary,
-        0x9f38 => "Processing Options Data Object List (PDOL)": Binary,
+        0x9f38 => "Processing Options Data Object List (PDOL)": Dol,
         0x9f39 => "Point-of-Service (POS) Entry Mode": Binary,
         0x9f3a => "Amount, Reference Currency": Binary,
         0x9f3b => "Application Reference Currency": Binary,

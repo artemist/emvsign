@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::errors::DecodeError;
+use super::{dol::Dol, errors::DecodeError};
 
 /// A TLV tag and value
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -20,6 +20,7 @@ pub enum Value {
     CompressedNumeric(String),
     Numeric(u128),
     Template(Vec<Field>),
+    Dol(Dol),
 }
 
 impl Display for Value {
@@ -46,6 +47,18 @@ impl Value {
             Value::Template(fields) => {
                 for field in fields {
                     field.fmt(f, indent + 1)?;
+                }
+                Ok(())
+            }
+            Value::Dol(dol) => {
+                for entry in dol.get_entries() {
+                    write!(
+                        f,
+                        "\n{:width$}{entry}",
+                        "",
+                        width = (indent + 1) * 4,
+                        entry = entry
+                    )?;
                 }
                 Ok(())
             }

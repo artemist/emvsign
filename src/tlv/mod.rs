@@ -1,4 +1,5 @@
 pub mod decoders;
+pub mod dol;
 pub mod elements;
 pub mod errors;
 #[cfg(test)]
