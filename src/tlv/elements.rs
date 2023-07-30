@@ -41,17 +41,16 @@ macro_rules! elements_map {
                 DataElement {
                     tag: $tag,
                     name: $name,
-                    short_name: {
-                        #[allow(unused)]
-                        let option: Option<&str> = None;
-                        $(let option = Some($short_name);)?
-                        option
-                    },
+                    short_name: optional!($($short_name)*),
                     typ: ElementType::$typ,
                 }
             )
         ,)*])
-    }
+    };
+}
+macro_rules! optional {
+    () => {None};
+    ($($some:tt)*) => {Some($($some)*)};
 }
 
 lazy_static! {
