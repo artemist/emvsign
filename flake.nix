@@ -42,6 +42,7 @@
 
         devShells.emvsign = with pkgs; mkShell {
           packages = [ pkgconfig rustc cargo clippy pcsclite ];
+          RUST_SRC_PATH = "${rust.packages.stable.rustPlatform.rustLibSrc}";
         };
         devShell = devShells.emvsign;
       })) // {
