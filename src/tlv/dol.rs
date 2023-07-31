@@ -39,20 +39,24 @@ impl Dol {
                     Value::Alphanumeric(s) => Self::copy_bytes(s.as_bytes(), dest),
                     Value::AlphanumericSpecial(s) => Self::copy_bytes(s.as_bytes(), dest),
                     Value::Binary(b) => Self::copy_bytes(b, dest),
-                    Value::CompressedNumeric(s) => {
+                    Value::DigitString(s) => {
                         dest.fill(0xff);
-                        for (i, ch) in s.bytes().enumerate().take(entry.size * 2) {
-                            let is_msb = i % 2 == 0;
-                            let digit: u8 =
-                                (ch as char).to_digit(10).unwrap_or(0).try_into().unwrap();
-                            dest[i / 2] = if is_msb {
-                                digit << 4 | 0x0f
-                            } else {
-                                dest[i / 2] & 0xf0 | digit
+                        for (digits, dest) in s.chunks(2).zip(dest.iter_mut()) {
+                            *dest = match digits {
+                                [single] => single << 4 | 0x0f,
+                                [higher, lower] => higher << 4 | lower,
+                                [..] => unreachable!(), // slice::chunks(2) cannot return any other sizes
                             }
                         }
                     }
-                    Value::Numeric(_) => todo!(),
+                    Value::Numeric(mut number) => {
+                        for dest in dest.iter_mut().rev() {
+                            let digits: u8 = (number % 100).try_into().unwrap();
+                            number /= 100;
+
+                            *dest = (digits / 10) << 4 | (digits % 10);
+                        }
+                    }
                     // Templates should just be all zeroes
                     Value::Template(_) => {}
                     // Technically this would be binary to the ccard but it should never ask

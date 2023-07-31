@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Display, Write};
 
 use super::{dol::Dol, errors::DecodeError};
 
@@ -16,8 +16,7 @@ pub enum Value {
     Alphanumeric(String),
     AlphanumericSpecial(String),
     Binary(Vec<u8>),
-    // Use a string here because the leading digit of a PAN could theoretically be 0 and we don't want to mess up
-    CompressedNumeric(String),
+    DigitString(Vec<u8>), // CompressedNumeric in the EMV spec
     Numeric(u128),
     Template(Vec<Field>),
     Dol(Dol),
@@ -42,7 +41,13 @@ impl Value {
                 }
                 Ok(())
             }
-            Value::CompressedNumeric(n) => write!(f, "cn{}", n),
+            Value::DigitString(n) => {
+                write!(f, "cn")?;
+                for &digit in n.iter() {
+                    f.write_char(char::from_digit(digit as u32, 10).unwrap())?;
+                }
+                Ok(())
+            }
             Value::Numeric(n) => write!(f, "n{}", n),
             Value::Template(fields) => {
                 for field in fields {
@@ -72,12 +77,25 @@ impl Value {
         }
     }
 
+    pub fn get_digit_string(&self) -> Option<&[u8]> {
+        match self {
+            Value::DigitString(digits) => Some(digits.as_slice()),
+            _ => None,
+        }
+    }
+
     pub fn get_string(&self) -> Option<&str> {
         match self {
             Value::Alphabetic(s) => Some(s),
             Value::Alphanumeric(s) => Some(s),
             Value::AlphanumericSpecial(s) => Some(s),
-            Value::CompressedNumeric(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn get_numeric(&self) -> Option<&u128> {
+        match self {
+            Value::Numeric(n) => Some(n),
             _ => None,
         }
     }
@@ -165,19 +183,15 @@ impl Field {
     }
 
     pub fn get_path_numeric(&self, path: &[u16]) -> Result<u128, DecodeError> {
-        match self.get_path(path)? {
-            Value::Numeric(n) => Ok(*n),
-            _ => Err(DecodeError::WrongType(path[path.len() - 1], "Numeric")),
-        }
+        self.get_path(path)?
+            .get_numeric()
+            .cloned()
+            .ok_or_else(|| DecodeError::WrongType(path[path.len() - 1], "Numeric"))
     }
 
     pub fn get_path_string(&self, path: &[u16]) -> Result<&str, DecodeError> {
-        match self.get_path(path)? {
-            Value::Alphabetic(s) => Ok(s),
-            Value::Alphanumeric(s) => Ok(s),
-            Value::AlphanumericSpecial(s) => Ok(s),
-            Value::CompressedNumeric(s) => Ok(s),
-            _ => Err(DecodeError::WrongType(path[path.len() - 1], "String")),
-        }
+        self.get_path(path)?
+            .get_string()
+            .ok_or_else(|| DecodeError::WrongType(path[path.len() - 1], "String"))
     }
 }

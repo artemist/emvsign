@@ -9,7 +9,7 @@ pub enum ElementType {
     Alphanumeric,
     AlphanumericSpecial,
     Binary,
-    CompressedNumeric,
+    DigitString, // CompressedNumeric in the EMV spec
     Numeric,
     Template,
     Dol,
@@ -59,7 +59,7 @@ lazy_static! {
         0x004f => "Application Dedicated File (ADF) Name": Binary,
         0x0050 => "Application Label": AlphanumericSpecial,
         0x0057 => "Track 2 Equivalent Data": Binary,
-        0x005a => "Application Primary Account Number (PAN)" ("PAN"): CompressedNumeric,
+        0x005a => "Application Primary Account Number (PAN)" ("PAN"): DigitString,
         0x0061 => "Application Template": Template,
         0x006f => "File Control Information (FCI) Template": Template,
         0x0070 => "READ RECORD Response Message Template": Template,

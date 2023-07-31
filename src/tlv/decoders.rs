@@ -75,7 +75,7 @@ fn decode_with_type(typ: ElementType, raw: &[u8]) -> Result<Value, DecodeError> 
         ElementType::Alphanumeric => alphanumeric(raw),
         ElementType::AlphanumericSpecial => alphanumeric_special(raw),
         ElementType::Binary => binary(raw),
-        ElementType::CompressedNumeric => compressed_numeric(raw),
+        ElementType::DigitString => compressed_numeric(raw),
         ElementType::Numeric => numeric(raw),
         ElementType::Template => template(raw),
         ElementType::Dol => dol(raw),
@@ -160,15 +160,22 @@ pub(super) fn compressed_numeric(raw: &[u8]) -> Result<Value, DecodeError> {
     if raw.len() > 10 {
         return Err(DecodeError::LengthTooLong(10, raw.len()));
     }
-    let mut s = String::with_capacity(raw.len() * 2);
 
-    for digit in raw.iter().flat_map(|byte| [byte >> 4, byte & 0x0f]) {
-        if digit == 0x0f {
-            break;
+    let mut s = Vec::with_capacity(raw.len() * 2);
+
+    for digit in raw
+        .iter()
+        .flat_map(|byte| [byte >> 4, byte & 0x0f])
+        .take_while(|&digit| digit != 0x0f)
+    {
+        if digit < 10 {
+            s.push(digit);
+        } else {
+            return Err(DecodeError::BadBcd(digit));
         }
-        s.push(char::from_digit(digit as u32, 10).ok_or(DecodeError::BadBcd(digit))?);
     }
-    Ok(Value::CompressedNumeric(s))
+
+    Ok(Value::DigitString(s))
 }
 
 pub(super) fn numeric(raw: &[u8]) -> Result<Value, DecodeError> {
