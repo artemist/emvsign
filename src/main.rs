@@ -86,16 +86,12 @@ fn get_card(options: &Options, context: &pcsc::Context) -> anyhow::Result<pcsc::
     let readers = context
         .list_readers_owned()
         .expect("Failed to list readers");
-    if options.reader >= readers.len() {
+    let Some(reader) = readers.get(options.reader) else {
         anyhow::bail!(
             "No reader at index {}, only {} readers found",
             options.reader,
             readers.len()
         );
-    }
-    Ok(context.connect(
-        &readers[options.reader],
-        pcsc::ShareMode::Exclusive,
-        pcsc::Protocols::ANY,
-    )?)
+    };
+    Ok(context.connect(reader, pcsc::ShareMode::Exclusive, pcsc::Protocols::ANY)?)
 }

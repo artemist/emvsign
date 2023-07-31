@@ -30,10 +30,10 @@ impl Dol {
 
     pub fn encode(&self, data: &HashMap<u16, Value>) -> Box<[u8]> {
         let mut encoded = vec![0; self.size];
-        let mut offset = 0;
-        for entry in self.entries.iter() {
+        let mut encoded_slice = encoded.as_mut_slice();
+        for entry in &self.entries {
+            let (dest, remaining) = encoded_slice.split_at_mut(entry.size);
             if let Some(value) = data.get(&entry.tag) {
-                let dest = &mut encoded[offset..offset + entry.size];
                 match value {
                     Value::Alphabetic(s) => Self::copy_bytes(s.as_bytes(), dest),
                     Value::Alphanumeric(s) => Self::copy_bytes(s.as_bytes(), dest),
@@ -63,7 +63,7 @@ impl Dol {
                     Value::Dol(_) => {}
                 }
             }
-            offset += entry.size;
+            encoded_slice = remaining;
             // If we don't know the element it has to be zeroed, but it already is
         }
 

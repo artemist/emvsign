@@ -117,7 +117,7 @@ lazy_static! {
         0x9f07 => "Application Usage Control": Binary,
         0x9f08 => "Application Version Number": Binary,
         0x9f09 => "Application Version Number": Binary,
-        0x9f0b => "Cardholder Name Extended": Binary,
+        0x9f0b => "Cardholder Name Extended": AlphanumericSpecial,
         0x9f0d => "Issuer Action Code - Default": Binary,
         0x9f0e => "Issuer Action Code - Denial": Binary,
         0x9f0f => "Issuer Action Code - Online": Binary,
