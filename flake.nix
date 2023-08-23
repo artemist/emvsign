@@ -21,7 +21,7 @@
           cargoLock.lockFile = ./Cargo.lock;
           doCheck = false;
           nativeBuildInputs = [ pkgconfig ];
-          buildInputs = [ dbus ];
+          buildInputs = [ dbus pcsclite ];
 
           meta = with lib; {
             homepage = "https://github.com/artemist/emvsign";

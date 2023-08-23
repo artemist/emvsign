@@ -1,4 +1,5 @@
 use anyhow::Context;
+use log::error;
 use structopt::StructOpt;
 mod exchange;
 mod processing_options;
@@ -35,6 +36,8 @@ enum Command {
     GetKey,
 }
 fn main() -> anyhow::Result<()> {
+    pretty_env_logger::init();
+
     let options = Options::from_args();
     let context =
         pcsc::Context::establish(pcsc::Scope::User).context("Failed to create PCSC session")?;
@@ -47,7 +50,7 @@ fn main() -> anyhow::Result<()> {
             println!("{:#?}", res);
             // Reset the card because we could be in a PIN authenticated state
             if card.disconnect(pcsc::Disposition::ResetCard).is_err() {
-                eprintln!("Failed to reset card, you may need to manually unplug the card");
+                error!("Failed to reset card, you may need to manually unplug the card");
             }
             res?;
             Ok(())
@@ -65,7 +68,7 @@ fn main() -> anyhow::Result<()> {
 
             // Reset the card because we could be in a PIN authenticated state
             if card.disconnect(pcsc::Disposition::ResetCard).is_err() {
-                eprintln!("Failed to reset card, you may need to manually unplug the card");
+                error!("Failed to reset card, you may need to manually unplug the card");
             }
             Ok(())
         }

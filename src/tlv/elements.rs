@@ -165,6 +165,7 @@ lazy_static! {
         0x9f46 => "ICC Public Key Certificate": Binary,
         0x9f47 => "ICC Public Key Exponent": Binary,
         0x9f48 => "ICC Public Key Remainder": Binary,
+        0x9f49 => "Dynamic Data Authentication Data Object List (DDOL)": Dol,
         0x9f4a => "Static Data Authentication Tag List": Binary,
         0x9f4b => "Signed Dynamic Application Data": Binary,
         0x9f4c => "ICC Dynamic Number": Binary,

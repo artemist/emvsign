@@ -190,11 +190,7 @@ impl Display for Field {
             } else {
                 "<unknown tag>".to_string()
             };
-            writeln!(
-                f,
-                "0x{:04x} ({}) => {},",
-                self.tag, tag_name, self.value
-            )
+            writeln!(f, "0x{:04x} ({}) => {},", self.tag, tag_name, self.value)
         }
     }
 }

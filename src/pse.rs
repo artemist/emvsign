@@ -1,4 +1,5 @@
 use anyhow::Context;
+use log::debug;
 
 use crate::{
     exchange::{exchange, ADPUCommand},
@@ -81,7 +82,7 @@ pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<PSE
     let mut applications = Vec::new();
     let pse_data = tlv::read_field(&response)
         .context("Failed to parse Payment System Environment response")?;
-    println!("{}:\n{}", pse, pse_data);
+    debug!("{}:\n{}", pse, pse_data);
 
     if let Value::Binary(b) = pse_data
         .get_path(&[0x6f, 0xa5, 0x88])
@@ -94,12 +95,12 @@ pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<PSE
 
         for rec in 1..16 {
             let (sfi_response, sfi_sw) = exchange(card, &ADPUCommand::read_record(sfi, rec))?;
-            println!("SFI {:02x} rec {:02x} ({:04x})", b[0], rec, sfi_sw);
+            debug!("SFI {:02x} rec {:02x} ({:04x})", b[0], rec, sfi_sw);
             if sfi_sw == 0x9000 {
                 let record = tlv::read_field(&sfi_response).with_context(|| {
                     format!("Failed to parse SFI 0x{:02x} record 0x{:02x}", sfi, rec)
                 })?;
-                println!("{}", record);
+                debug!("{}", record);
 
                 applications.push(record.try_into().context("Failed to parse SFI record")?);
             }

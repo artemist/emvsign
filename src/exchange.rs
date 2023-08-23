@@ -1,4 +1,5 @@
 use anyhow::Context;
+use log::trace;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct ADPUCommand<'a> {
@@ -92,17 +93,17 @@ pub fn exchange(card: &mut pcsc::Card, command: &ADPUCommand) -> anyhow::Result<
     let mut sw2;
     let tx = card.transaction().context("Failed to create transaction")?;
     {
+        let encoded = &command
+            .encode()
+            .ok_or_else(|| anyhow::anyhow!("Could not encode command"))?;
+        trace!("→ {}", hex::encode(encoded));
         let data = tx
-            .transmit(
-                &command
-                    .encode()
-                    .ok_or_else(|| anyhow::anyhow!("Could not encode command"))?,
-                &mut recieve_buffer,
-            )
+            .transmit(encoded, &mut recieve_buffer)
             .context("Failed to recieve from card")?;
         if data.len() < 2 {
             anyhow::bail!("Received message too short");
         }
+        trace!("← {}", hex::encode(data));
         sw1 = data[data.len() - 2];
         sw2 = data[data.len() - 1];
         response.extend_from_slice(&data[..(data.len() - 2)]);
@@ -113,14 +114,14 @@ pub fn exchange(card: &mut pcsc::Card, command: &ADPUCommand) -> anyhow::Result<
         let mut modified_command = *command;
         modified_command.ne = sw2 as u32;
 
+        let encoded = &modified_command
+            .encode()
+            .ok_or_else(|| anyhow::anyhow!("Could not encode command"))?;
+        trace!("→ {}", hex::encode(encoded));
         let data = tx
-            .transmit(
-                &modified_command
-                    .encode()
-                    .ok_or_else(|| anyhow::anyhow!("Could not encode command"))?,
-                &mut recieve_buffer,
-            )
+            .transmit(encoded, &mut recieve_buffer)
             .context("Failed to recieve from card after reducing size")?;
+        trace!("← {}", hex::encode(data));
         sw1 = data[data.len() - 2];
         sw2 = data[data.len() - 1];
         response.extend_from_slice(&data[..(data.len() - 2)]);
@@ -136,9 +137,11 @@ pub fn exchange(card: &mut pcsc::Card, command: &ADPUCommand) -> anyhow::Result<
             sw2,  // P3: Expected length
         ];
 
+        trace!("→ {}", hex::encode(continuation_command));
         let data = tx
             .transmit(&continuation_command, &mut recieve_buffer)
             .context("Failed to recieve from card while requesting continuation data")?;
+        trace!("← {}", hex::encode(data));
         sw1 = data[data.len() - 2];
         sw2 = data[data.len() - 1];
         response.extend_from_slice(&data[..(data.len() - 2)]);

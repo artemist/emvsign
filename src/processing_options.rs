@@ -1,4 +1,5 @@
 use anyhow::Context;
+use log::{debug, info};
 
 use crate::{
     exchange::{exchange, ADPUCommand},
@@ -14,7 +15,7 @@ pub fn read_processing_options(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Res
         );
     }
 
-    println!(
+    info!(
         "selected payment application {:02x?}\n{}",
         aid,
         tlv::read_field(&response)?
@@ -32,7 +33,7 @@ pub fn read_processing_options(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Res
     }
 
     let gpo = tlv::read_field(&response).context("Failed to parse processing options")?;
-    println!("{}", gpo);
+    debug!("{}", gpo);
 
     let (_aip, afl) = match gpo.tag {
         0x77 => (
@@ -69,7 +70,7 @@ pub fn read_processing_options(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Res
                 );
             }
             let field = tlv::read_field(&response)?;
-            println!("SFI {:02x} rec {:02x} ({:04x})\n{}", sfi, record, sw, field);
+            debug!("SFI {:02x} rec {:02x} ({:04x})\n{}", sfi, record, sw, field);
             card_info.extend_from_slice(field.value.get_template().ok_or_else(|| {
                 anyhow::anyhow!("SFI {:02x} record {:02x} is not a template", sfi, record)
             })?);
@@ -77,6 +78,6 @@ pub fn read_processing_options(card: &mut pcsc::Card, aid: &[u8]) -> anyhow::Res
     }
 
     let ret = tlv::Value::Template(card_info);
-    println!("{}", ret);
+    debug!("{}", ret);
     Ok(ret)
 }

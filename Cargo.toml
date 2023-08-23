@@ -6,7 +6,10 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
+hex = "0.4"
 lazy_static = "1.4.0"
+log = "0.4"
 pcsc = "2.7"
+pretty_env_logger = "0.5"
 serde = { version = "1.0.163", features = ["derive"] }
 structopt = "0.3"
