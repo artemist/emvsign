@@ -1,8 +1,15 @@
 use chrono::NaiveDate;
+use crypto_bigint::modular::runtime_mod::DynResidue;
+use crypto_bigint::modular::runtime_mod::DynResidueParams;
+use crypto_bigint::prelude::*;
 use crypto_bigint::U2048;
-use log::error;
+use sha1::Digest;
+use sha1::Sha1;
 
-use super::{KeyId, VerifyError, SYSTEM_KEYS};
+use crate::tlv::decoders::compressed_numeric;
+use crate::tlv::decoders::numeric;
+
+use super::{KeyId, VerifyError, CA_KEYS};
 
 fn certificate_to_bigint(certificate: &[u8]) -> Result<U2048, VerifyError> {
     if certificate.len() > 248 {
@@ -10,9 +17,21 @@ fn certificate_to_bigint(certificate: &[u8]) -> Result<U2048, VerifyError> {
     }
 
     let mut arr = [0u8; 256];
-    (&mut arr[256 - certificate.len()..]).copy_from_slice(certificate);
+    arr[256 - certificate.len()..].copy_from_slice(certificate);
 
     Ok(U2048::from_be_slice(&arr))
+}
+
+fn date_ym(mmyy: &[u8]) -> Result<NaiveDate, VerifyError> {
+    let mut year = 2000 + numeric(&mmyy[1..2]).map_err(|_| VerifyError::InvalidData)?;
+    let mut month = numeric(&mmyy[0..1]).map_err(|_| VerifyError::InvalidData)?;
+    if month == 12 {
+        year += 1;
+        month = 1;
+    }
+    NaiveDate::from_ymd_opt(year as i32, month as u32, 1)
+        .and_then(|date| date.pred_opt())
+        .ok_or(VerifyError::InvalidData)
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -33,11 +52,84 @@ impl IssuerPublicKey {
         issuer_remainder: &[u8],
         pan: &[u8],
     ) -> Result<Self, VerifyError> {
-        let system_key = SYSTEM_KEYS
+        let ca_key = CA_KEYS
             .get(&KeyId { rid, index })
-            .ok_or_else(|| VerifyError::UnknownCAKey { rid, index })?;
+            .ok_or(VerifyError::UnknownCAKey { rid, index })?;
 
-        todo!()
+        // Step 1: Make sure N_CA (number of bytes in the CA key modulus) is the same length as the
+        // encrypted issuer certificate
+        let ca_modulus_len = (ca_key.modulus.bits_vartime() + 7) / 8;
+        if ca_modulus_len != issuer_certificate_be.len() {
+            return Err(VerifyError::CertificateLengthMismatch {
+                mod_size: ca_modulus_len,
+                cert_size: issuer_certificate_be.len(),
+            });
+        }
+
+        // Step 2: recover the certificate
+        let issuer_certificate = certificate_to_bigint(&issuer_certificate_be)?;
+
+        // A very annoying way of doing (issuer_certificate ** exponent) % modulus
+        // See EMV Book 2 Annex B2.1
+        let recovered_arr =
+            DynResidue::new(&issuer_certificate, DynResidueParams::new(&ca_key.modulus))
+                .pow_bounded_exp(&U2048::from_u32(ca_key.exponent), 32)
+                .retrieve()
+                .to_be_bytes();
+
+        let recovered = &recovered_arr[256 - ca_modulus_len..];
+
+        // Steps 3-4, 11: Make sure we understand the cert type
+        if recovered[0] != 0x6a || recovered[1] != 0x02 || recovered[11] != 1 || recovered[12] != 1
+        {
+            return Err(VerifyError::InvalidSignature);
+        }
+
+        // Steps 5-7: Check the hash
+        let mut hasher = Sha1::new();
+        hasher.update(&recovered[1..ca_modulus_len - 21]);
+        hasher.update(&issuer_remainder);
+        hasher.update(&issuer_exponent_be);
+        if &hasher.finalize()[..] != &recovered[ca_modulus_len - 21..ca_modulus_len - 1] {
+            return Err(VerifyError::InvalidSignature);
+        }
+
+        // Step 8: Check if PAN matches
+        let iin = compressed_numeric(&recovered[2..6]).map_err(|_| VerifyError::UnmatchedPAN)?;
+        if !pan.starts_with(&iin) {
+            return Err(VerifyError::UnmatchedPAN);
+        }
+
+        // Step 9: Check expiry date
+        // Don't do this, this program should probably be run on expired cards anyway
+
+        // Step 10: Check CRLs
+        // I don't want to and have no idea where to get one anyway
+
+        // Step 11: Format everything and return
+        let issuer_modulus_len = usize::from(recovered[13]);
+
+        let issuer_modulus = if issuer_modulus_len <= ca_modulus_len - 36 {
+            certificate_to_bigint(&recovered[15..15 + issuer_modulus_len])?
+        } else {
+            certificate_to_bigint(&recovered[15..ca_modulus_len - 21])?
+                << (issuer_remainder.len() * 8)
+                | certificate_to_bigint(&issuer_remainder)?
+        };
+
+        let mut issuer_exponent_be_arr = [0u8; 4];
+        if issuer_exponent_be.len() > 4 {
+            return Err(VerifyError::InvalidData);
+        }
+        issuer_exponent_be_arr[4 - issuer_exponent_be.len()..].copy_from_slice(&issuer_exponent_be);
+
+        Ok(Self {
+            iin,
+            expiry: date_ym(&recovered[6..8])?,
+            serial_number: recovered[8..11].try_into().unwrap(),
+            exponent: u32::from_be_bytes(issuer_exponent_be_arr),
+            modulus: issuer_modulus,
+        })
     }
 }
 
