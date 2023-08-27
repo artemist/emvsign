@@ -4,6 +4,7 @@ use anyhow::Context;
 use log::error;
 use structopt::StructOpt;
 use tlv::Value;
+
 mod crypto;
 mod exchange;
 mod processing_options;
@@ -71,7 +72,10 @@ fn main() -> anyhow::Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("No applications in PSE"))?
                 .aid;
 
-            processing_options::read_processing_options(&mut card, aid)?;
+            let _options = processing_options::read_processing_options(&mut card, aid)?;
+
+            let mut rid_arr = [0u8; 8];
+            rid_arr[3..].copy_from_slice(&aid[..5]);
 
             // Reset the card because we could be in a PIN authenticated state
             if card.disconnect(pcsc::Disposition::ResetCard).is_err() {
@@ -94,7 +98,7 @@ fn main() -> anyhow::Result<()> {
             state.insert(0x9f37, Value::Binary(vec![0x00, 0x00, 0x00, 0x04]));
 
             let options = processing_options::read_processing_options(&mut card, aid)?;
-            transaction::do_transaction(&mut card, &options, &mut state);
+            transaction::do_transaction(&mut card, &options, &mut state)?;
 
             // Reset the card because we could be in a PIN authenticated state
             if card.disconnect(pcsc::Disposition::ResetCard).is_err() {

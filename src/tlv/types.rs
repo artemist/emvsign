@@ -1,14 +1,10 @@
 use core::fmt;
-use std::fmt::{Display, Write};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Write},
+};
 
 use super::{dol::Dol, errors::DecodeError};
-
-/// A TLV tag and value
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Field {
-    pub tag: u16,
-    pub value: Value,
-}
 
 /// A TLV value, see EMV 4.3 Book 3 section 4.3
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -19,19 +15,98 @@ pub enum Value {
     Binary(Vec<u8>),
     DigitString(Vec<u8>), // CompressedNumeric in the EMV spec
     Numeric(u128),
-    Template(Vec<Field>),
+    Template(FieldMap), // This will break if we have duplicates or order matters
     Dol(Dol),
+}
+
+pub type FieldMap = HashMap<u16, Value>;
+
+pub trait FieldMapExt {
+    fn get_path(&self, path: &[u16]) -> Result<&Value, DecodeError>;
+    fn into_path(self, path: &[u16]) -> Result<Value, DecodeError>;
+    fn display(&self) -> FieldMapDisplay;
+}
+
+pub struct FieldMapDisplay<'a>(&'a FieldMap);
+
+impl Display for FieldMapDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.is_empty() {
+            write!(f, "{{}}")
+        } else {
+            let mut adapter = PadAdapter {
+                fmt: f,
+                on_newline: false,
+            };
+            writeln!(adapter, "{{")?;
+            for (tag, value) in self.0 {
+                let tag_name = super::elements::ELEMENTS.get(tag).map(|elem| elem.name);
+                let tag_name = if let Some(tag_name) = tag_name {
+                    format!("\"{}\"", tag_name)
+                } else {
+                    "<unknown tag>".to_string()
+                };
+                writeln!(adapter, "0x{:04x} ({}) => {},", tag, tag_name, value)?;
+            }
+            write!(f, "}}")
+        }
+    }
+}
+
+impl FieldMapExt for FieldMap {
+    fn get_path(&self, path: &[u16]) -> Result<&Value, DecodeError> {
+        let mut curr_map = self;
+
+        if path.is_empty() {
+            return Err(DecodeError::NoPathRequested);
+        }
+        for tag in &path[..path.len() - 1] {
+            let Some(field) = curr_map.get(tag) else {
+                return Err(DecodeError::NoSuchMember(*tag));
+            };
+
+            let Some(next_map) = field.as_template() else {
+                return Err(DecodeError::WrongType(*tag, "Template"));
+            };
+
+            curr_map = next_map;
+        }
+
+        curr_map
+            .get(&path[path.len() - 1])
+            .ok_or(DecodeError::NoSuchMember(path[path.len() - 1]))
+    }
+
+    fn into_path(self, path: &[u16]) -> Result<Value, DecodeError> {
+        let mut curr_map = self;
+
+        if path.is_empty() {
+            return Err(DecodeError::NoPathRequested);
+        }
+        for tag in &path[..path.len() - 1] {
+            let Some(field) = curr_map.remove(tag) else {
+                return Err(DecodeError::NoSuchMember(*tag));
+            };
+
+            let Some(_curr_map) = field.into_template() else {
+                return Err(DecodeError::WrongType(*tag, "Template"));
+            };
+        }
+
+        curr_map
+            .remove(&path[path.len() - 1])
+            .ok_or(DecodeError::NoSuchMember(path[path.len() - 1]))
+    }
+
+    fn display(&self) -> FieldMapDisplay {
+        FieldMapDisplay(self)
+    }
 }
 
 struct PadAdapter<'buf, 'fmt> {
     fmt: &'buf mut fmt::Formatter<'fmt>,
     on_newline: bool,
 }
-// impl PadAdapter<'_, '_> {
-//     fn new(f: &mut fmt::Formatter<'_>, on_newline: bool) -> Self {
-//         PadAdapter { fmt: f, on_newline }
-//     }
-// }
 
 impl fmt::Write for PadAdapter<'_, '_> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
@@ -78,21 +153,7 @@ impl Display for Value {
                 Ok(())
             }
             Value::Numeric(n) => write!(f, "n{}", n),
-            Value::Template(fields) => {
-                if fields.is_empty() {
-                    write!(f, "{{}}")
-                } else {
-                    let mut adapter = PadAdapter {
-                        fmt: f,
-                        on_newline: false,
-                    };
-                    writeln!(adapter, "{{")?;
-                    for field in fields {
-                        write!(adapter, "{}", field)?;
-                    }
-                    write!(f, "}}")
-                }
-            }
+            Value::Template(fields) => FieldMapDisplay(fields).fmt(f),
             Value::Dol(dol) => {
                 if dol.get_entries().is_empty() {
                     write!(f, "{{}}")
@@ -113,129 +174,133 @@ impl Display for Value {
 }
 
 impl Value {
-    pub fn get_template(&self) -> Option<&[Field]> {
-        match self {
-            Value::Template(fields) => Some(fields),
-            _ => None,
-        }
-    }
-
-    pub fn get_digit_string(&self) -> Option<&[u8]> {
-        match self {
-            Value::DigitString(digits) => Some(digits.as_slice()),
-            _ => None,
-        }
-    }
-
-    pub fn get_string(&self) -> Option<&str> {
+    pub fn into_alphabetic(self) -> Option<String> {
         match self {
             Value::Alphabetic(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn into_alphanumeric(self) -> Option<String> {
+        match self {
             Value::Alphanumeric(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn into_alphanumeric_special(self) -> Option<String> {
+        match self {
             Value::AlphanumericSpecial(s) => Some(s),
             _ => None,
         }
     }
 
-    pub fn get_numeric(&self) -> Option<&u128> {
+    pub fn into_binary(self) -> Option<Vec<u8>> {
+        match self {
+            Value::Binary(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    pub fn into_digit_string(self) -> Option<Vec<u8>> {
+        match self {
+            Value::DigitString(digits) => Some(digits),
+            _ => None,
+        }
+    }
+
+    pub fn into_numeric(self) -> Option<u128> {
         match self {
             Value::Numeric(n) => Some(n),
             _ => None,
         }
     }
 
-    pub fn get_dol(&self, tag: u16) -> Result<&Dol, DecodeError> {
-        match self.get_path(&[tag])? {
-            Value::Dol(d) => Ok(d),
-            _ => Err(DecodeError::WrongType(tag, "Dol")),
+    pub fn into_template(self) -> Option<FieldMap> {
+        match self {
+            Value::Template(fields) => Some(fields),
+            _ => None,
+        }
+    }
+
+    pub fn into_dol(self) -> Option<Dol> {
+        match self {
+            Value::Dol(d) => Some(d),
+            _ => None,
+        }
+    }
+
+    pub fn as_alphabetic(&self) -> Option<&str> {
+        match self {
+            Value::Alphabetic(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn as_alphanumeric(&self) -> Option<&str> {
+        match self {
+            Value::Alphanumeric(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn as_alphanumeric_special(&self) -> Option<&str> {
+        match self {
+            Value::AlphanumericSpecial(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn as_binary(&self) -> Option<&[u8]> {
+        match self {
+            Value::Binary(b) => Some(b.as_slice()),
+            _ => None,
+        }
+    }
+
+    pub fn as_digit_string(&self) -> Option<&[u8]> {
+        match self {
+            Value::DigitString(digits) => Some(digits.as_slice()),
+            _ => None,
+        }
+    }
+
+    pub fn as_numeric(&self) -> Option<&u128> {
+        match self {
+            Value::Numeric(n) => Some(n),
+            _ => None,
+        }
+    }
+
+    pub fn as_template(&self) -> Option<&FieldMap> {
+        match self {
+            Value::Template(fields) => Some(fields),
+            _ => None,
+        }
+    }
+
+    pub fn as_dol(&self) -> Option<&Dol> {
+        match self {
+            Value::Dol(d) => Some(d),
+            _ => None,
         }
     }
 
     pub fn get_path(&self, path: &[u16]) -> Result<&Value, DecodeError> {
-        let mut curr_template = self;
-
-        let mut last_tag = 0;
-        for tag in path {
-            let Value::Template(fields) = curr_template else {
-                return Err(DecodeError::WrongType(last_tag, "Template"));
-            };
-            let Some(field) = fields.iter().find(|field| field.tag == *tag) else {
-                return Err(DecodeError::NoSuchMember(*tag));
-            };
-            curr_template = &field.value;
-            last_tag = *tag;
-        }
-        Ok(curr_template)
-    }
-
-    pub fn get_path_owned(self, path: &[u16]) -> Result<Value, DecodeError> {
-        let mut curr_template = self;
-
-        let mut last_tag = 0;
-        for tag in path {
-            let Value::Template(fields) = curr_template else {
-                return Err(DecodeError::WrongType(last_tag, "Template"));
-            };
-            let Some(field) = fields.into_iter().find(|field| field.tag == *tag) else {
-                return Err(DecodeError::NoSuchMember(*tag));
-            };
-            curr_template = field.value;
-            last_tag = *tag;
-        }
-        Ok(curr_template)
-    }
-}
-
-impl Display for Field {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        {
-            let f: &mut std::fmt::Formatter<'_> = f;
-            let tag_name = super::elements::ELEMENTS
-                .get(&self.tag)
-                .map(|elem| elem.name);
-            let tag_name = if let Some(tag_name) = tag_name {
-                format!("\"{}\"", tag_name)
-            } else {
-                "<unknown tag>".to_string()
-            };
-            writeln!(f, "0x{:04x} ({}) => {},", self.tag, tag_name, self.value)
-        }
-    }
-}
-
-impl Field {
-    pub fn get_path(&self, path: &[u16]) -> Result<&Value, DecodeError> {
-        match path {
-            [] => Err(DecodeError::NoPathRequested),
-            [tag, ..] if *tag != self.tag => Err(DecodeError::NoSuchMember(*tag)),
-            [_, remaining @ ..] => self.value.get_path(remaining),
-        }
-    }
-
-    pub fn get_path_owned(self, path: &[u16]) -> Result<Value, DecodeError> {
-        match path {
-            [] => Err(DecodeError::NoPathRequested),
-            [tag, ..] if *tag != self.tag => Err(DecodeError::NoSuchMember(*tag)),
-            [_, remaining @ ..] => self.value.get_path_owned(remaining),
-        }
+        self.as_template()
+            .ok_or(DecodeError::WrongType(0, "Template"))
+            .and_then(|map| map.get_path(path))
     }
 
     pub fn get_path_binary(&self, path: &[u16]) -> Result<&[u8], DecodeError> {
-        match self.get_path(path)? {
-            Value::Binary(b) => Ok(b),
-            _ => Err(DecodeError::WrongType(path[path.len() - 1], "Binary")),
-        }
+        self.get_path(path)?
+            .as_binary()
+            .ok_or(DecodeError::WrongType(path[path.len() - 1], "Binary"))
     }
 
-    pub fn get_path_numeric(&self, path: &[u16]) -> Result<u128, DecodeError> {
-        self.get_path(path)?
-            .get_numeric()
-            .cloned()
-            .ok_or_else(|| DecodeError::WrongType(path[path.len() - 1], "Numeric"))
-    }
-
-    pub fn get_path_string(&self, path: &[u16]) -> Result<&str, DecodeError> {
-        self.get_path(path)?
-            .get_string()
-            .ok_or_else(|| DecodeError::WrongType(path[path.len() - 1], "String"))
+    pub fn get_path_owned(self, path: &[u16]) -> Result<Value, DecodeError> {
+        self.into_template()
+            .ok_or(DecodeError::WrongType(0, "Template"))
+            .and_then(|map| map.into_path(path))
     }
 }

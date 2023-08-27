@@ -10,7 +10,7 @@ use super::elements::{ElementType, ELEMENTS};
 /// supposed to use an ASN.1 IDL file to figure out what the fields mean
 ///
 /// For more information read EMV 4.4 Book 3 annex B1 and then cry.
-use super::{errors, DecodeError, Field, Value};
+use super::{errors, DecodeError, FieldMap, Value};
 
 use std::str;
 
@@ -95,9 +95,9 @@ fn read_tlv(raw: &[u8]) -> Result<(u16, usize, Value), DecodeError> {
     Ok((tag, tl_len + len, value))
 }
 
-pub fn read_field(raw: &[u8]) -> Result<Field, DecodeError> {
+pub fn read_field(raw: &[u8]) -> Result<(u16, Value), DecodeError> {
     let (tag, _, value) = read_tlv(raw)?;
-    Ok(Field { tag, value })
+    Ok((tag, value))
 }
 
 fn restricted_charset(
@@ -173,8 +173,7 @@ pub fn compressed_numeric(raw: &[u8]) -> Result<Vec<u8>, DecodeError> {
 }
 
 pub fn numeric(raw: &[u8]) -> Result<u128, DecodeError> {
-    Ok(raw
-        .iter()
+    raw.iter()
         .flat_map(|byte| [byte >> 4, byte & 0x0f])
         .try_fold(0, |acc, digit| {
             if digit <= 9 {
@@ -182,15 +181,15 @@ pub fn numeric(raw: &[u8]) -> Result<u128, DecodeError> {
             } else {
                 Err(DecodeError::BadBcd(digit))
             }
-        })?)
+        })
 }
 
-pub fn template(mut raw: &[u8]) -> Result<Vec<Field>, DecodeError> {
-    let mut fields = Vec::new();
+pub fn template(mut raw: &[u8]) -> Result<FieldMap, DecodeError> {
+    let mut fields = FieldMap::new();
     while !raw.is_empty() {
         let (tag, len, value) = read_tlv(raw)?;
         raw = &raw[len..];
-        fields.push(Field { tag, value });
+        fields.insert(tag, value);
     }
     Ok(fields)
 }

@@ -67,7 +67,7 @@ impl IssuerPublicKey {
         }
 
         // Step 2: recover the certificate
-        let issuer_certificate = certificate_to_bigint(&issuer_certificate_be)?;
+        let issuer_certificate = certificate_to_bigint(issuer_certificate_be)?;
 
         // A very annoying way of doing (issuer_certificate ** exponent) % modulus
         // See EMV Book 2 Annex B2.1
@@ -88,9 +88,9 @@ impl IssuerPublicKey {
         // Steps 5-7: Check the hash
         let mut hasher = Sha1::new();
         hasher.update(&recovered[1..ca_modulus_len - 21]);
-        hasher.update(&issuer_remainder);
-        hasher.update(&issuer_exponent_be);
-        if &hasher.finalize()[..] != &recovered[ca_modulus_len - 21..ca_modulus_len - 1] {
+        hasher.update(issuer_remainder);
+        hasher.update(issuer_exponent_be);
+        if hasher.finalize()[..] != recovered[ca_modulus_len - 21..ca_modulus_len - 1] {
             return Err(VerifyError::InvalidSignature);
         }
 
@@ -114,14 +114,14 @@ impl IssuerPublicKey {
         } else {
             certificate_to_bigint(&recovered[15..ca_modulus_len - 21])?
                 << (issuer_remainder.len() * 8)
-                | certificate_to_bigint(&issuer_remainder)?
+                | certificate_to_bigint(issuer_remainder)?
         };
 
         let mut issuer_exponent_be_arr = [0u8; 4];
         if issuer_exponent_be.len() > 4 {
             return Err(VerifyError::InvalidData);
         }
-        issuer_exponent_be_arr[4 - issuer_exponent_be.len()..].copy_from_slice(&issuer_exponent_be);
+        issuer_exponent_be_arr[4 - issuer_exponent_be.len()..].copy_from_slice(issuer_exponent_be);
 
         Ok(Self {
             iin,

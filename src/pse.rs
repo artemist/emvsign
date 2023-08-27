@@ -3,7 +3,7 @@ use log::debug;
 
 use crate::{
     exchange::{exchange, ADPUCommand},
-    tlv::{self, errors::DecodeError, Field, Value},
+    tlv::{self, errors::DecodeError, FieldMap, FieldMapExt, Value},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,50 +15,49 @@ pub struct ApplicationTemplate {
     pub iin: Option<u32>,
 }
 
-impl TryFrom<Field> for ApplicationTemplate {
+impl TryFrom<FieldMap> for ApplicationTemplate {
     type Error = DecodeError;
 
-    fn try_from(value: Field) -> Result<Self, Self::Error> {
+    fn try_from(map: FieldMap) -> Result<Self, Self::Error> {
         //TODO: Deal with cards like Discover Debit which put multiple Application Templates in one
         //record
-        let mut aid = None;
-        let mut label = None;
-        let mut priority = None;
-        let mut country = None;
-        let mut iin = None;
+        let mut template = map
+            .into_path(&[0x61])?
+            .into_template()
+            .ok_or(DecodeError::WrongType(0x61, "Template"))?;
+        let aid = template
+            .remove(&0x4f)
+            .and_then(Value::into_binary)
+            .ok_or(DecodeError::NoSuchMember(0x4f))?;
+        let label = template
+            .remove(&0x50)
+            .and_then(Value::into_alphanumeric_special)
+            .ok_or(DecodeError::NoSuchMember(0x50))?;
+        let priority = template
+            .remove(&0x87)
+            .and_then(Value::into_binary)
+            .and_then(|v| v.first().cloned());
 
-        let template = value.get_path_owned(&[0x70, 0x61])?;
-        if let Value::Template(fields) = template {
-            for field in fields.into_iter() {
-                match field.value {
-                    Value::Binary(b) if field.tag == 0x4f => aid = Some(b),
-                    Value::AlphanumericSpecial(s) if field.tag == 0x50 => label = Some(s),
-                    Value::Binary(b) if field.tag == 0x87 && b.len() == 1 => priority = Some(b[0]),
-                    Value::Template(ddt) if field.tag == 0x73 => {
-                        for ddt_field in ddt.into_iter() {
-                            match ddt_field.value {
-                                Value::Alphabetic(s) if ddt_field.tag == 0x5f55 => {
-                                    country = Some(s)
-                                }
-                                Value::Numeric(n) if ddt_field.tag == 0x42 => iin = Some(n as u32),
-                                _ => {}
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
+        let (country, iin) =
+            if let Some(mut inner_map) = template.remove(&0x73).and_then(Value::into_template) {
+                (
+                    inner_map.remove(&0x5f55).and_then(Value::into_alphabetic),
+                    inner_map
+                        .remove(&0x42)
+                        .and_then(Value::into_numeric)
+                        .map(|n| n as u32),
+                )
+            } else {
+                (None, None)
+            };
 
-            Ok(ApplicationTemplate {
-                aid: aid.ok_or(DecodeError::NoSuchMember(0x4f))?,
-                label: label.ok_or(DecodeError::NoSuchMember(0x50))?,
-                priority,
-                country,
-                iin,
-            })
-        } else {
-            Err(DecodeError::WrongType(0x61, "Template"))
-        }
+        Ok(ApplicationTemplate {
+            aid,
+            label,
+            priority,
+            country,
+            iin,
+        })
     }
 }
 
@@ -80,12 +79,19 @@ pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<PSE
     }
 
     let mut applications = Vec::new();
-    let pse_data = tlv::read_field(&response)
+    let (tag, pse_value) = tlv::read_field(&response)
         .context("Failed to parse Payment System Environment response")?;
-    debug!("{}:\n{}", pse, pse_data);
+    debug!("{}:\n{:02x} => {}", pse, tag, pse_value);
+    if tag != 0x6f {
+        anyhow::bail!("PSE had incorrect root object")
+    }
 
-    if let Value::Binary(b) = pse_data
-        .get_path(&[0x6f, 0xa5, 0x88])
+    let pse_map = pse_value
+        .as_template()
+        .ok_or_else(|| anyhow::anyhow!("PSE root object was not a template"))?;
+
+    if let Value::Binary(b) = pse_map
+        .get_path(&[0xa5, 0x88])
         .context("Could not find SFI in PSE")?
     {
         let sfi = b[0];
@@ -97,12 +103,19 @@ pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<PSE
             let (sfi_response, sfi_sw) = exchange(card, &ADPUCommand::read_record(sfi, rec))?;
             debug!("SFI {:02x} rec {:02x} ({:04x})", b[0], rec, sfi_sw);
             if sfi_sw == 0x9000 {
-                let record = tlv::read_field(&sfi_response).with_context(|| {
+                let (_tag, record) = tlv::read_field(&sfi_response).with_context(|| {
                     format!("Failed to parse SFI 0x{:02x} record 0x{:02x}", sfi, rec)
                 })?;
                 debug!("{}", record);
+                let record_map = record
+                    .into_template()
+                    .ok_or_else(|| anyhow::anyhow!("SFI record wasn't a template!"))?;
 
-                applications.push(record.try_into().context("Failed to parse SFI record")?);
+                applications.push(
+                    record_map
+                        .try_into()
+                        .context("Failed to parse SFI record")?,
+                );
             }
 
             if sfi_sw == 0x6a83 {
@@ -113,7 +126,11 @@ pub fn list_applications(card: &mut pcsc::Card, pse: &str) -> anyhow::Result<PSE
     }
 
     Ok(PSEData {
-        languages: if let Ok(s) = pse_data.get_path_string(&[0x6f, 0xa5, 0x5f2d]) {
+        languages: if let Some(s) = pse_map
+            .get_path(&[0xa5, 0x5f2d])
+            .ok()
+            .and_then(Value::as_alphanumeric)
+        {
             s.as_bytes()
                 .chunks_exact(2)
                 .filter_map(|bytes| String::from_utf8(bytes.to_vec()).ok())
