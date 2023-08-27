@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Context;
+use crypto::chain::IssuerPublicKey;
 use log::error;
 use structopt::StructOpt;
 use tlv::Value;
@@ -72,10 +73,15 @@ fn main() -> anyhow::Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("No applications in PSE"))?
                 .aid;
 
-            let _options = processing_options::read_processing_options(&mut card, aid)?;
+            if aid.len() < 5 {
+                anyhow::bail!("AID too short");
+            }
 
-            let mut rid_arr = [0u8; 8];
-            rid_arr[3..].copy_from_slice(&aid[..5]);
+            let options = processing_options::read_processing_options(&mut card, aid)?;
+
+            let issuer_key = IssuerPublicKey::from_options(aid[..5].try_into().unwrap(), &options)?;
+
+            println!("{:#?}", issuer_key);
 
             // Reset the card because we could be in a PIN authenticated state
             if card.disconnect(pcsc::Disposition::ResetCard).is_err() {

@@ -8,6 +8,8 @@ use sha1::Sha1;
 
 use crate::tlv::decoders::compressed_numeric;
 use crate::tlv::decoders::numeric;
+use crate::tlv::FieldMap;
+use crate::tlv::Value;
 
 use super::{KeyId, VerifyError, CA_KEYS};
 
@@ -44,14 +46,29 @@ pub struct IssuerPublicKey {
 }
 
 impl IssuerPublicKey {
-    pub fn from_card_data(
-        rid: u64,
-        index: u8,
-        issuer_certificate_be: &[u8],
-        issuer_exponent_be: &[u8],
-        issuer_remainder: &[u8],
-        pan: &[u8],
-    ) -> Result<Self, VerifyError> {
+    pub fn from_options(rid: [u8; 5], options: &FieldMap) -> Result<Self, VerifyError> {
+        let index = options
+            .get(&0x8f)
+            .and_then(Value::as_binary)
+            .and_then(|b| b.first().cloned())
+            .ok_or(VerifyError::MissingTag(0x8f))?;
+        let issuer_certificate_be = options
+            .get(&0x90)
+            .and_then(Value::as_binary)
+            .ok_or(VerifyError::MissingTag(0x90))?;
+        let issuer_exponent_be = options
+            .get(&0x9f32)
+            .and_then(Value::as_binary)
+            .ok_or(VerifyError::MissingTag(0x9f32))?;
+        let issuer_remainder = options
+            .get(&0x92)
+            .and_then(Value::as_binary)
+            .ok_or(VerifyError::MissingTag(0x92))?;
+        let pan = options
+            .get(&0x5a)
+            .and_then(Value::as_digit_string)
+            .ok_or(VerifyError::MissingTag(0x5a))?;
+
         let ca_key = CA_KEYS
             .get(&KeyId { rid, index })
             .ok_or(VerifyError::UnknownCAKey { rid, index })?;
