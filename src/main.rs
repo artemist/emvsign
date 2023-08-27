@@ -1,10 +1,15 @@
+use std::collections::HashMap;
+
 use anyhow::Context;
 use log::error;
 use structopt::StructOpt;
+use tlv::Value;
+mod crypto;
 mod exchange;
 mod processing_options;
 mod pse;
 mod tlv;
+mod transaction;
 
 #[derive(Debug, StructOpt)]
 struct Options {
@@ -34,6 +39,8 @@ enum Command {
     ShowPSE,
     #[structopt(about = "Get the public key")]
     GetKey,
+    #[structopt(about = "Run a test transaction")]
+    TestTransaction,
 }
 fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
@@ -65,6 +72,29 @@ fn main() -> anyhow::Result<()> {
                 .aid;
 
             processing_options::read_processing_options(&mut card, aid)?;
+
+            // Reset the card because we could be in a PIN authenticated state
+            if card.disconnect(pcsc::Disposition::ResetCard).is_err() {
+                error!("Failed to reset card, you may need to manually unplug the card");
+            }
+            Ok(())
+        }
+        Command::TestTransaction => {
+            let mut card = get_card(&options, &context).context("Failed to connect to card")?;
+            let pse_data = pse::list_applications(&mut card, &options.pse)?;
+            let aid = &pse_data
+                .applications
+                .get(0)
+                .ok_or_else(|| anyhow::anyhow!("No applications in PSE"))?
+                .aid;
+
+            let mut state = HashMap::new();
+
+            // Chosen by fair die roll
+            state.insert(0x9f37, Value::Binary(vec![0x00, 0x00, 0x00, 0x04]));
+
+            let options = processing_options::read_processing_options(&mut card, aid)?;
+            transaction::do_transaction(&mut card, &options, &mut state);
 
             // Reset the card because we could be in a PIN authenticated state
             if card.disconnect(pcsc::Disposition::ResetCard).is_err() {

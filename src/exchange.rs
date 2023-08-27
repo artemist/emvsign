@@ -84,6 +84,17 @@ impl ADPUCommand<'_> {
             ne: 0x100,  // 256 bytes, the card will correct us
         }
     }
+
+    pub fn internal_authenticate(ddol: &[u8]) -> ADPUCommand {
+        ADPUCommand {
+            cla: 0x00,  // Propriatery command
+            ins: 0x88,  // INTERNAL AUTHENTICATE
+            p1: 0x00,   // The only non-RFU value
+            p2: 0x00,   // The only non-RFU value
+            data: ddol, // Dynamic Data Authentication Data Object List, may be empty
+            ne: 0x100,  // 256 bytes, the card will correct us
+        }
+    }
 }
 
 pub fn exchange(card: &mut pcsc::Card, command: &ADPUCommand) -> anyhow::Result<(Vec<u8>, u16)> {

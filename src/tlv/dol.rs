@@ -59,7 +59,7 @@ impl Dol {
                     }
                     // Templates should just be all zeroes
                     Value::Template(_) => {}
-                    // Technically this would be binary to the ccard but it should never ask
+                    // Technically this would be binary to the card but it should never ask
                     Value::Dol(_) => {}
                 }
             }

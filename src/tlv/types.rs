@@ -143,6 +143,13 @@ impl Value {
         }
     }
 
+    pub fn get_dol(&self, tag: u16) -> Result<&Dol, DecodeError> {
+        match self.get_path(&[tag])? {
+            Value::Dol(d) => Ok(d),
+            _ => Err(DecodeError::WrongType(tag, "Dol")),
+        }
+    }
+
     pub fn get_path(&self, path: &[u16]) -> Result<&Value, DecodeError> {
         let mut curr_template = self;
 
