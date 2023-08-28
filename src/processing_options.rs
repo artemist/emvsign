@@ -1,17 +1,17 @@
-use std::collections::HashMap;
+
 
 use anyhow::Context;
 use log::{debug, info};
 
 use crate::{
     exchange::{exchange, ADPUCommand},
-    tlv::{self, DecodeError, FieldMapExt},
+    tlv::{self, DecodeError, FieldMap, FieldMapExt, Value},
 };
 
 pub fn read_processing_options(
     card: &mut pcsc::Card,
     aid: &[u8],
-) -> anyhow::Result<HashMap<u16, tlv::Value>> {
+) -> anyhow::Result<(FieldMap, Vec<u8>)> {
     let (response, sw) = exchange(card, &ADPUCommand::select(aid))?;
     if sw != 0x9000 {
         anyhow::bail!(
@@ -43,7 +43,7 @@ pub fn read_processing_options(
         tlv::read_field(&response).context("Failed to parse processing options")?;
     debug!("{} => {}", gpo_tag, gpo_value);
 
-    let (_aip, afl) = match gpo_tag {
+    let (aip, afl) = match gpo_tag {
         0x77 => (
             gpo_value
                 .get_path_binary(&[0x82])
@@ -65,11 +65,16 @@ pub fn read_processing_options(
             anyhow::bail!("Got tag {:04x} when trying to read AIP and AFL", tag);
         }
     };
-    let mut card_info = HashMap::new();
+    let mut card_info = FieldMap::new();
+    card_info.insert(0x82, Value::Binary(aip.to_vec()));
+    card_info.insert(0x94, Value::Binary(afl.to_vec()));
+
+    let mut sda_data = Vec::new();
     for afl_fields in afl.chunks_exact(4) {
         let sfi = afl_fields[0] >> 3;
         let first_record = afl_fields[1];
         let last_record = afl_fields[2];
+        let num_sda = afl_fields[3];
 
         for record in first_record..=last_record {
             let (response, sw) = exchange(card, &ADPUCommand::read_record(sfi, record))?;
@@ -89,9 +94,21 @@ pub fn read_processing_options(
             card_info.extend(file_value.into_template().ok_or_else(|| {
                 anyhow::anyhow!("SFI {:02x} record {:02x} is not a template", sfi, record)
             })?);
+
+            if record - first_record < num_sda {
+                debug!("Adding record {:02x}", record);
+                // Exclude the tag and length if SFI is 1-10. (Book 3 section 10.3)
+                // What the fuck.
+                if sfi <= 10 {
+                    let (_, _, tl_len) = tlv::decoders::read_tl(&response)?;
+                    sda_data.extend(&response[tl_len..])
+                } else if sfi <= 30 {
+                    sda_data.extend(&response)
+                }
+            }
         }
     }
 
     debug!("{}", card_info.display());
-    Ok(card_info)
+    Ok((card_info, sda_data))
 }

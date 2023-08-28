@@ -6,6 +6,8 @@ use log::error;
 use structopt::StructOpt;
 use tlv::Value;
 
+use crate::crypto::chain::ICCPublicKey;
+
 mod crypto;
 mod exchange;
 mod processing_options;
@@ -77,11 +79,12 @@ fn main() -> anyhow::Result<()> {
                 anyhow::bail!("AID too short");
             }
 
-            let options = processing_options::read_processing_options(&mut card, aid)?;
+            let (options, sda_data) = processing_options::read_processing_options(&mut card, aid)?;
 
             let issuer_key = IssuerPublicKey::from_options(aid[..5].try_into().unwrap(), &options)?;
-
             println!("{:#?}", issuer_key);
+            let icc_key = ICCPublicKey::from_options(&issuer_key, &sda_data, &options)?;
+            println!("{:#?}", icc_key);
 
             // Reset the card because we could be in a PIN authenticated state
             if card.disconnect(pcsc::Disposition::ResetCard).is_err() {
@@ -103,7 +106,7 @@ fn main() -> anyhow::Result<()> {
             // Chosen by fair die roll
             state.insert(0x9f37, Value::Binary(vec![0x00, 0x00, 0x00, 0x04]));
 
-            let options = processing_options::read_processing_options(&mut card, aid)?;
+            let (options, _sda_data) = processing_options::read_processing_options(&mut card, aid)?;
             transaction::do_transaction(&mut card, &options, &mut state)?;
 
             // Reset the card because we could be in a PIN authenticated state
