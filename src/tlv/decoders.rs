@@ -1,3 +1,5 @@
+use crate::util::left_pad_slice;
+
 use super::dol::Dol;
 use super::elements::{ElementType, ELEMENTS};
 /// Decode what EMV calls "BER-TLV"
@@ -13,12 +15,6 @@ use super::elements::{ElementType, ELEMENTS};
 use super::{errors, DecodeError, FieldMap, Value};
 
 use std::str;
-
-fn left_pad_slice<const LEN: usize>(slice: &[u8]) -> [u8; LEN] {
-    let mut s = [0; LEN];
-    s[LEN - slice.len()..].copy_from_slice(slice);
-    s
-}
 
 /// Decode the tag and length of a TLV string. This is only useful in template,
 /// as it will use this to cut down the data to the proper size.
