@@ -4,6 +4,7 @@ use crypto_bigint::modular::runtime_mod::DynResidueParams;
 use crypto_bigint::prelude::*;
 use crypto_bigint::U2048;
 
+use log::debug;
 use sha1::Digest;
 use sha1::Sha1;
 
@@ -92,6 +93,8 @@ fn parse_certificate(
 
     let recovered = &recovered_arr[256 - recovered_len..];
 
+    debug!("Recovered {}", hex::encode(recovered));
+
     // Steps 3-4, 11: Make sure we understand the cert type
     if !is_icc
         && (recovered[0] != 0x6a
@@ -113,7 +116,7 @@ fn parse_certificate(
     hasher.update(child_remainder);
     hasher.update(child_exponent_slice);
     hasher.update(extra_signed_data);
-    // If is_cc is true then we're doing CDA/DDA, in which case only 0x82 (AIP) is allowed
+    // If is_icc is true then we're doing CDA/DDA, in which case only 0x82 (AIP) is allowed
     // If this isn't true then we'll have an invalid signature anyway, so just assume that it's only 0x82
     if is_icc && options.contains_key(&0x9f4a) {
         hasher.update(
@@ -141,10 +144,10 @@ fn parse_certificate(
     // I don't want to and have no idea where to get one anyway
 
     // Step 11: Format everything and return
-    let issuer_modulus_len = usize::from(recovered[13]);
+    let child_modulus_len = usize::from(recovered[9 + pan_len]);
 
-    let issuer_modulus = if issuer_modulus_len <= recovered_len - 32 - pan_len {
-        certificate_to_bigint(&recovered[11 + pan_len..11 + pan_len + issuer_modulus_len])?
+    let child_modulus_len = if child_modulus_len <= recovered_len - 32 - pan_len {
+        certificate_to_bigint(&recovered[11 + pan_len..11 + pan_len + child_modulus_len])?
     } else {
         certificate_to_bigint(&recovered[11 + pan_len..recovered_len - 21])?
             << (child_remainder.len() * 8)
@@ -160,7 +163,7 @@ fn parse_certificate(
         date_ym(&recovered[2 + pan_len..4 + pan_len])?,
         recovered[4 + pan_len..7 + pan_len].try_into().unwrap(),
         u32::from_be_bytes(left_pad_slice(child_exponent_slice)),
-        issuer_modulus,
+        child_modulus_len,
     ))
 }
 
