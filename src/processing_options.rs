@@ -9,8 +9,9 @@ use crate::{
 pub fn read_processing_options(
     card: &mut pcsc::Card,
     aid: &[u8],
+    state: &FieldMap,
 ) -> anyhow::Result<(FieldMap, Vec<u8>)> {
-    let (response, sw) = exchange(card, &ADPUCommand::select(aid))?;
+    let (ats, sw) = exchange(card, &ADPUCommand::select(aid))?;
     if sw != 0x9000 {
         anyhow::bail!(
             "Failure returned by card while selecting payment app: 0x{:04x}",
@@ -18,21 +19,29 @@ pub fn read_processing_options(
         );
     }
 
-    {
-        let (select_tag, select_value) = tlv::read_field(&response)?;
-        info!(
-            "selected payment application {:02x?}\n{} => {}",
-            aid, select_tag, select_value
-        );
-    }
+    let (ats_tag, ats_value) = tlv::read_field(&ats)?;
+    info!(
+        "selected payment application {:02x?}\n{:04x} => {}",
+        aid, ats_tag, ats_value
+    );
+
+    let ats_map = ats_value
+        .as_template()
+        .ok_or_else(|| anyhow::anyhow!("ATS response was not a map!"))?;
+
+    let pdol_encoded = ats_map
+        .get_path(&[0xa5, 0x9f38])
+        .ok()
+        .and_then(Value::as_dol)
+        .map(|pdol| pdol.encode(Some(0x83), state))
+        .unwrap_or(vec![0x83, 0x00]);
 
     // Request command template, no length, as recommended by EMV 4.3 book 3 section 10.1
-    // TODO: Handle the case where a PDOL is in the FCI. I have one card that does this but
-    // it would be annoying to implement
-    let (response, sw) = exchange(card, &ADPUCommand::get_processing_options(&[0x83, 0x00]))?;
+    let (response, sw) = exchange(card, &ADPUCommand::get_processing_options(&pdol_encoded))?;
     if sw != 0x9000 {
         anyhow::bail!(
-            "Failure returned by card while doing empty get processing options: 0x{:04x}",
+            "Failure returned by card while running GET PROCESSING OPTIONS with {}: 0x{:04x}",
+            hex::encode(pdol_encoded),
             sw
         );
     }

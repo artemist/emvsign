@@ -54,6 +54,13 @@ fn main() -> anyhow::Result<()> {
     let context =
         pcsc::Context::establish(pcsc::Scope::User).context("Failed to create PCSC session")?;
 
+    let mut state = HashMap::new();
+
+    // Chosen by fair die roll
+    state.insert(0x9f37, Value::Binary(vec![0x00, 0x00, 0x00, 0x04]));
+    // Currency code: USD
+    state.insert(0x5f2a, Value::Numeric(840));
+
     match options.cmd {
         Command::ListReaders => list_readers(&context),
         Command::ShowPSE => {
@@ -80,7 +87,8 @@ fn main() -> anyhow::Result<()> {
                 anyhow::bail!("AID too short");
             }
 
-            let (options, sda_data) = processing_options::read_processing_options(&mut card, aid)?;
+            let (options, sda_data) =
+                processing_options::read_processing_options(&mut card, aid, &state)?;
 
             let issuer_key = IssuerPublicKey::from_options(aid[..5].try_into().unwrap(), &options)?;
             println!("{:#?}", issuer_key);
@@ -102,12 +110,8 @@ fn main() -> anyhow::Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("No applications in PSE"))?
                 .aid;
 
-            let mut state = HashMap::new();
-
-            // Chosen by fair die roll
-            state.insert(0x9f37, Value::Binary(vec![0x00, 0x00, 0x00, 0x04]));
-
-            let (options, _sda_data) = processing_options::read_processing_options(&mut card, aid)?;
+            let (options, _sda_data) =
+                processing_options::read_processing_options(&mut card, aid, &state)?;
             transaction::do_transaction(&mut card, &options, &mut state)?;
 
             // Reset the card because we could be in a PIN authenticated state

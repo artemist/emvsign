@@ -19,7 +19,7 @@ pub fn do_transaction(
         .ok_or_else(|| anyhow::anyhow!("Could not get ddol"))?;
     let (authenticate_resp_bytes, sw) = exchange(
         card,
-        &ADPUCommand::internal_authenticate(&ddol.encode(state)),
+        &ADPUCommand::internal_authenticate(&ddol.encode(None, state)),
     )?;
     let (tag, value) = tlv::read_field(&authenticate_resp_bytes)
         .context("Failed to parse internal authenticate")?;
