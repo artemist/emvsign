@@ -3,13 +3,13 @@ use log::{debug, info};
 
 use crate::{
     exchange::{exchange, ADPUCommand},
-    tlv::{self, DecodeError, FieldMap, FieldMapExt, Value},
+    tlv::{self, DecodeError, FieldMap, FieldMapExt, OptionsMap, Value},
 };
 
 pub fn read_processing_options(
     card: &mut pcsc::Card,
     aid: &[u8],
-    state: &FieldMap,
+    state: &OptionsMap,
 ) -> anyhow::Result<(FieldMap, Vec<u8>)> {
     let (ats, sw) = exchange(card, &ADPUCommand::select(aid))?;
     if sw != 0x9000 {

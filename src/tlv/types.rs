@@ -4,6 +4,8 @@ use std::{
     fmt::{Display, Write},
 };
 
+use multimap::MultiMap;
+
 use super::{dol::Dol, errors::DecodeError};
 
 /// A TLV value, see EMV 4.3 Book 3 section 4.3
@@ -19,7 +21,8 @@ pub enum Value {
     Dol(Dol),
 }
 
-pub type FieldMap = HashMap<u16, Value>;
+pub type FieldMap = MultiMap<u16, Value>;
+pub type OptionsMap = HashMap<u16, Value>;
 
 pub trait FieldMapExt {
     fn get_path(&self, path: &[u16]) -> Result<&Value, DecodeError>;
@@ -39,7 +42,7 @@ impl Display for FieldMapDisplay<'_> {
                 on_newline: false,
             };
             writeln!(adapter, "{{")?;
-            for (tag, value) in self.0 {
+            for (tag, value) in self.0.flat_iter() {
                 let tag_name = super::elements::ELEMENTS.get(tag).map(|elem| elem.name);
                 let tag_name = if let Some(tag_name) = tag_name {
                     format!("\"{}\"", tag_name)
@@ -84,17 +87,21 @@ impl FieldMapExt for FieldMap {
             return Err(DecodeError::NoPathRequested);
         }
         for tag in &path[..path.len() - 1] {
-            let Some(field) = curr_map.remove(tag) else {
+            let Some(field) = curr_map.remove(tag).and_then(|v| v.into_iter().next()) else {
                 return Err(DecodeError::NoSuchMember(*tag));
             };
 
-            let Some(_curr_map) = field.into_template() else {
+            let Some(next_map) = field.into_template() else {
                 return Err(DecodeError::WrongType(*tag, "Template"));
             };
+            curr_map = next_map;
         }
+
+        log::debug!("{}", curr_map.display());
 
         curr_map
             .remove(&path[path.len() - 1])
+            .and_then(|v| v.into_iter().next())
             .ok_or(DecodeError::NoSuchMember(path[path.len() - 1]))
     }
 

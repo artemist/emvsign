@@ -27,11 +27,9 @@ struct Options {
     reader: usize,
     #[structopt(
         long,
-        default_value = "1PAY.SYS.DDF01",
-        help = "Directory Definition File which contains the Payment System Directory"
+        help = "Use the PPSE (2PAY.SYS.DDF01) instead of the PSE (1PAY.SYS.DDF01)"
     )]
-    // Technically this should be a Box<[u8]> but structopt demands that everything be valid UTF-8
-    pse: String,
+    ppse: bool,
     #[structopt(subcommand)]
     cmd: Command,
 }
@@ -65,7 +63,7 @@ fn main() -> anyhow::Result<()> {
         Command::ListReaders => list_readers(&context),
         Command::ShowPSE => {
             let mut card = get_card(&options, &context).context("Failed to connect to card")?;
-            let res = pse::list_applications(&mut card, &options.pse);
+            let res = pse::list_applications(&mut card, options.ppse);
             println!("{:#?}", res);
             // Reset the card because we could be in a PIN authenticated state
             if card.disconnect(pcsc::Disposition::ResetCard).is_err() {
@@ -76,7 +74,7 @@ fn main() -> anyhow::Result<()> {
         }
         Command::GetKey => {
             let mut card = get_card(&options, &context).context("Failed to connect to card")?;
-            let pse_data = pse::list_applications(&mut card, &options.pse)?;
+            let pse_data = pse::list_applications(&mut card, options.ppse)?;
             let aid = &pse_data
                 .applications
                 .get(0)
@@ -103,7 +101,7 @@ fn main() -> anyhow::Result<()> {
         }
         Command::TestTransaction => {
             let mut card = get_card(&options, &context).context("Failed to connect to card")?;
-            let pse_data = pse::list_applications(&mut card, &options.pse)?;
+            let pse_data = pse::list_applications(&mut card, options.ppse)?;
             let aid = &pse_data
                 .applications
                 .get(0)

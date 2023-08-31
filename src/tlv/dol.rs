@@ -1,6 +1,6 @@
-use std::{cmp::min, collections::HashMap, fmt::Display};
+use std::{cmp::min, fmt::Display};
 
-use super::{decoders::read_tl, DecodeError, Value};
+use super::{decoders::read_tl, DecodeError, OptionsMap, Value};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct DOLEntry {
@@ -28,7 +28,7 @@ impl Dol {
         &self.entries
     }
 
-    pub fn encode(&self, tag: Option<u16>, data: &HashMap<u16, Value>) -> Vec<u8> {
+    pub fn encode(&self, tag: Option<u16>, data: &OptionsMap) -> Vec<u8> {
         let mut encoded;
         let mut encoded_slice;
 
