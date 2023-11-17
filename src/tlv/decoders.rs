@@ -129,7 +129,7 @@ pub fn alphanumeric_special(raw: &[u8]) -> Result<String, DecodeError> {
         // value somewhere, which specifies which ISO 8859 codepage (e.g. latin-1) to use.
         // This doesn't even apply to the user name.
         // I expected more from France, and I barely expect anything from France.
-        // The amount of state required to propery convert that to Unicode would be terrible
+        // The amount of state required to properly convert that to Unicode would be terrible
         // so I won't do it unless someone sends me a card that does so.
         if b < 0x20 || b == 0x7f {
             return Err(DecodeError::UnsupportedChar(

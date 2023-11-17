@@ -4,7 +4,7 @@ use anyhow::Context;
 use crypto::chain::IssuerPublicKey;
 use log::error;
 use structopt::StructOpt;
-use tlv::Value;
+use tlv::{OptionsMap, Value};
 
 use crate::crypto::chain::ICCPublicKey;
 
@@ -52,7 +52,7 @@ fn main() -> anyhow::Result<()> {
     let context =
         pcsc::Context::establish(pcsc::Scope::User).context("Failed to create PCSC session")?;
 
-    let mut state = HashMap::new();
+    let mut state = OptionsMap::new();
 
     // Chosen by fair die roll
     state.insert(0x9f37, Value::Binary(vec![0x00, 0x00, 0x00, 0x04]));

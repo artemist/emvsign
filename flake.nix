@@ -20,7 +20,7 @@
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
           doCheck = false;
-          nativeBuildInputs = [ pkgconfig ];
+          nativeBuildInputs = [ pkg-config ];
           buildInputs = [ dbus pcsclite ];
 
           meta = with lib; {
@@ -41,7 +41,7 @@
         };
 
         devShells.emvsign = with pkgs; mkShell {
-          packages = [ pkgconfig rustc cargo clippy pcsclite ];
+          packages = [ pkg-config rustc cargo clippy pcsclite ];
           RUST_SRC_PATH = "${rust.packages.stable.rustPlatform.rustLibSrc}";
         };
         devShell = devShells.emvsign;
